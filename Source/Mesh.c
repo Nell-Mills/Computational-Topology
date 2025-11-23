@@ -108,20 +108,20 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 	#pragma omp parallel for default(shared)
 	for (int64_t i = 0; i < mesh->num_faces[0]; i++)
 	{
-		mesh->edges[i * 3].v_1			= mesh->faces[0][i].p[0];
-		mesh->edges[i * 3].v_2			= mesh->faces[0][i].p[1];
+		mesh->edges[i * 3].from			= mesh->faces[0][i].p[0];
+		mesh->edges[i * 3].to			= mesh->faces[0][i].p[1];
 		mesh->edges[i * 3].next			= (i * 3) + 1;
 		mesh->edges[i * 3].other_half		= -1;
 		mesh->edges[i * 3].face			= i;
 
-		mesh->edges[(i * 3) + 1].v_1		= mesh->faces[0][i].p[1];
-		mesh->edges[(i * 3) + 1].v_2		= mesh->faces[0][i].p[2];
+		mesh->edges[(i * 3) + 1].from		= mesh->faces[0][i].p[1];
+		mesh->edges[(i * 3) + 1].to		= mesh->faces[0][i].p[2];
 		mesh->edges[(i * 3) + 1].next		= (i * 3) + 2;
 		mesh->edges[(i * 3) + 1].other_half	= -1;
 		mesh->edges[(i * 3) + 1].face		= i;
 
-		mesh->edges[(i * 3) + 2].v_1		= mesh->faces[0][i].p[2];
-		mesh->edges[(i * 3) + 2].v_2		= mesh->faces[0][i].p[0];
+		mesh->edges[(i * 3) + 2].from		= mesh->faces[0][i].p[2];
+		mesh->edges[(i * 3) + 2].to		= mesh->faces[0][i].p[0];
 		mesh->edges[(i * 3) + 2].next		= i * 3;
 		mesh->edges[(i * 3) + 2].other_half	= -1;
 		mesh->edges[(i * 3) + 2].face		= i;
@@ -132,8 +132,8 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 		if (mesh->edges[i].other_half != -1) { continue; }
 		for (int j = (i + 1); j < mesh->num_edges; j++)
 		{
-			if ((mesh->edges[i].v_1 == mesh->edges[j].v_2) &&
-				(mesh->edges[i].v_2 == mesh->edges[j].v_1))
+			if ((mesh->edges[i].from == mesh->edges[j].to) &&
+				(mesh->edges[i].to == mesh->edges[j].from))
 			{
 				mesh->edges[i].other_half = j;
 				mesh->edges[j].other_half = i;
@@ -148,7 +148,7 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 		mesh->first_edge[i] = -1;
 		for (int64_t j = 0; j < mesh->num_edges; j++)
 		{
-			if (mesh->edges[j].v_1 == i)
+			if (mesh->edges[j].from == i)
 			{
 				mesh->first_edge[i] = j;
 				break;
@@ -234,8 +234,8 @@ void mp_mesh_print(FILE *file, mp_mesh_t *mesh)
 			for (int i = 0; i < 3; i++)
 			{
 				fprintf(file, "Edge %d:\n", i);
-				fprintf(file, "--> From vertex %u to %u\n", mesh->edges[i].v_1,
-									mesh->edges[i].v_2);
+				fprintf(file, "--> From vertex %u to %u\n", mesh->edges[i].from,
+									mesh->edges[i].to);
 				fprintf(file, "--> Next edge: %ld\n", mesh->edges[i].next);
 				fprintf(file, "--> Other half: %ld\n", mesh->edges[i].other_half);
 				fprintf(file, "--> Face: %u\n", mesh->edges[i].face);

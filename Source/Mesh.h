@@ -38,8 +38,8 @@ typedef struct
 
 typedef struct
 {
-	uint32_t v_1;
-	uint32_t v_2;
+	uint32_t from;
+	uint32_t to;
 	int64_t next;
 	int64_t other_half;
 	uint32_t face;
