@@ -114,6 +114,82 @@ void ct_vertex_values_sort(uint32_t num_values, ct_vertex_value_t *vertex_values
 	qsort(vertex_values, num_values, sizeof(vertex_values[0]), ct_qsort_compare);
 }
 
+ct_disjoint_set_t ct_disjoint_set_initialise()
+{
+	ct_disjoint_set_t disjoint_set;
+	memset(&disjoint_set, 0, sizeof(disjoint_set));
+
+	disjoint_set.parent	= NULL;
+	disjoint_set.rank	= NULL;
+
+	return disjoint_set;
+}
+
+int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
+		char error_message[NM_MAX_ERROR_LENGTH])
+{
+	if (disjoint_set->num_elements < 1)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Tried to allocate disjoint set with no elements.");
+		return -1;
+	}
+
+	disjoint_set->parent = malloc(disjoint_set->num_elements * sizeof(uint32_t));
+	disjoint_set->rank = malloc(disjoint_set->num_elements * sizeof(uint32_t));
+	if (!disjoint_set->parent || !disjoint_set->rank)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for disjoint set.");
+		return -1;
+	}
+
+	ct_disjoint_set_reset(disjoint_set);
+
+	return 0;
+}
+
+void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set)
+{
+	if (disjoint_set->parent)
+	{
+		free(disjoint_set->parent);
+		disjoint_set->parent = NULL;
+	}
+
+	if (disjoint_set->rank)
+	{
+		free(disjoint_set->rank);
+		disjoint_set->rank = NULL;
+	}
+}
+
+void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set)
+{
+	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	{
+		disjoint_set->parent[i] = i;
+		disjoint_set->rank[i] = 1;
+	}
+}
+
+void ct_disjoint_set_union(uint32_t v1, uint32_t v2, ct_disjoint_set_t *disjoint_set)
+{
+	uint32_t v1_root = ct_disjoint_set_find(v1, disjoint_set);
+	uint32_t v2_root = ct_disjoint_set_find(v2, disjoint_set);
+
+	// TODO - union by rank.
+	disjoint_set->parent[v1_root] = v2_root;
+}
+
+uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set)
+{
+	if (disjoint_set->parent[v] == v) { return v; }
+	return ct_disjoint_set_find(disjoint_set->parent[v], disjoint_set);
+
+	// TODO path compression.
+}
+
 #ifdef CT_DEBUG
 void ct_contour_tree_print(FILE *file, ct_contour_tree_t *contour_tree)
 {
