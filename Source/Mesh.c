@@ -156,6 +156,8 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 		}
 	}
 
+	if (mp_mesh_check_manifold(mesh, error_message)) { return -1; }
+
 	return 0;
 }
 
@@ -174,8 +176,84 @@ void mp_mesh_free_edges(mp_mesh_t *mesh)
 	}
 }
 
+int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+{
+	int has_edges = 0;
+	if (mesh->edges) { has_edges = 1; }
+	if (!has_edges && mp_mesh_calculate_edges(mesh, error_message)) { return -1; }
+
+	uint8_t is_manifold = 1;
+
+	// Edges pairs test:
+	#pragma omp parallel for shared(is_manifold)
+	for (uint32_t i = 0; i < mesh->num_edges; i++)
+	{
+		if (!is_manifold) { continue; }
+		for (uint32_t j = i + 1; j < mesh->num_edges; j++)
+		{
+			if ((mesh->edges[i].other_half == j) && (mesh->edges[j].other_half != i))
+			{
+				is_manifold = 0;
+				break;
+			}
+			if ((mesh->edges[i].from == mesh->edges[j].from) &&
+				(mesh->edges[i].to == mesh->edges[j].to))
+			{
+				is_manifold = 0;
+				break;
+			}
+		}
+	}
+	mesh->is_manifold = is_manifold;
+	if (!mesh->is_manifold)
+	{
+		if (!has_edges) { mp_mesh_free_edges(mesh); }
+		return 0;
+	}
+
+	// Vertex cycles test:
+	// FIXME this fails on quads (triangulated) for some reason - mesh loader?
+	#pragma omp parallel for shared(is_manifold)
+	for (uint32_t i = 0; i < mesh->num_vertices; i++)
+	{
+		if (!is_manifold) { continue; }
+
+		if (mesh->first_edge[i] == -1)
+		{
+			is_manifold = 0;
+			continue;
+		}
+
+		uint32_t num_connected_edges = 0;
+		for (uint32_t j = 0; j < mesh->num_edges; j++)
+		{
+			if ((mesh->edges[j].from == i) || (mesh->edges[j].to == i))
+			{
+				num_connected_edges++;
+			}
+		}
+
+		// Count triangle fan from first edge:
+		int64_t current_edge = mesh->first_edge[i];
+		while(current_edge != -1)
+		{
+			current_edge = mesh->edges[mesh->edges[current_edge].next].next;
+			current_edge = mesh->edges[current_edge].other_half;
+			num_connected_edges -= 2;
+			if (current_edge == mesh->first_edge[i]) { break; }
+		}
+
+		// If there are edges left, they must not be in first triangle fan:
+		if (num_connected_edges) { is_manifold = 0; }
+	}
+	mesh->is_manifold = is_manifold;
+
+	if (!has_edges) { mp_mesh_free_edges(mesh); }
+	return 0;
+}
+
 #ifdef MP_DEBUG
-void mp_mesh_print(FILE *file, mp_mesh_t *mesh)
+void mp_mesh_print_short(FILE *file, mp_mesh_t *mesh)
 {
 	fprintf(file, "*******************\n");
 	fprintf(file, "* Mesh debug info *\n");
@@ -183,6 +261,9 @@ void mp_mesh_print(FILE *file, mp_mesh_t *mesh)
 
 	fprintf(file, "Mesh name: %s\n", mesh->name);
 	fprintf(file, "Mesh path: %s\n", mesh->path);
+	fprintf(file, "Mesh is manifold: ");
+	if (mesh->is_manifold) { fprintf(file, "Yes\n"); }
+	else { fprintf(file, "No\n"); }
 
 	fprintf(file, "\n");
 
@@ -197,6 +278,11 @@ void mp_mesh_print(FILE *file, mp_mesh_t *mesh)
 		fprintf(file, "%u, ", mesh->num_faces[i]);
 	}
 	fprintf(file, "%u\n", mesh->num_faces[mesh->num_lod_levels - 1]);
+}
+
+void mp_mesh_print(FILE *file, mp_mesh_t *mesh)
+{
+	mp_mesh_print_short(file, mesh);
 
 	if ((mesh->num_faces[0] > 0) && mesh->vertices && mesh->faces[0])
 	{

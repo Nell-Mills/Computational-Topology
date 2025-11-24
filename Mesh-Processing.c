@@ -18,7 +18,8 @@ int main(int argc, char **argv)
 	if (mp_mesh_calculate_edges(&mesh, error_message)) { goto error; }
 
 	#ifdef MP_DEBUG
-	mp_mesh_print(stdout, &mesh);
+	mp_mesh_print_short(stdout, &mesh);
+	fprintf(stdout, "\n");
 	#endif
 
 	mp_mesh_free(&mesh);

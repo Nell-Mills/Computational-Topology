@@ -58,6 +58,8 @@ typedef struct
 	char name[NM_MAX_NAME_LENGTH];
 	char path[NM_MAX_PATH_LENGTH];
 
+	uint8_t is_manifold;
+
 	uint32_t num_vertices;
 	mp_position_t *vertices;
 
@@ -84,8 +86,10 @@ int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 void mp_mesh_free(mp_mesh_t *mesh);
 int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 void mp_mesh_free_edges(mp_mesh_t *mesh);
+int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 
 #ifdef MP_DEBUG
+void mp_mesh_print_short(FILE *file, mp_mesh_t *mesh);
 void mp_mesh_print(FILE *file, mp_mesh_t *mesh);
 #endif
 
