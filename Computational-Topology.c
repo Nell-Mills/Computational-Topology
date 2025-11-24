@@ -20,33 +20,24 @@ int main(int argc, char **argv)
 	vertex_values = malloc(mesh.num_vertices * sizeof(ct_vertex_value_t));
 	if (!vertex_values) { goto error; }
 
-	int value_type = CT_VALUE_TYPE_FLOAT;
 	for (uint32_t i = 0; i < mesh.num_vertices; i++)
 	{
-		if (value_type == CT_VALUE_TYPE_FLOAT)
-		{
-			vertex_values[i].value.f = (rand() % mesh.num_vertices) * 1.f;
-		}
-		else if (value_type == CT_VALUE_TYPE_INT)
-		{
-			vertex_values[i].value.i = rand() % mesh.num_vertices;
-		}
-		else { vertex_values[i].value.u = rand() % mesh.num_vertices; }
+		vertex_values[i].value = (rand() % mesh.num_vertices) * 1.f;
 		vertex_values[i].vertex = i;
 	}
 
 	#ifdef MP_DEBUG
 	fprintf(stdout, "\n");
 	fprintf(stdout, "Before sorting:\n");
-	ct_vertex_values_print(stdout, value_type, mesh.num_vertices, vertex_values, 1);
+	ct_vertex_values_print(stdout, mesh.num_vertices, vertex_values);
 	fprintf(stdout, "\n\n");
 	#endif
 
-	ct_vertex_values_sort(value_type, mesh.num_vertices, vertex_values);
+	ct_vertex_values_sort(mesh.num_vertices, vertex_values);
 
 	#ifdef MP_DEBUG
 	fprintf(stdout, "After sorting:\n");
-	ct_vertex_values_print(stdout, value_type, mesh.num_vertices, vertex_values, 1);
+	ct_vertex_values_print(stdout, mesh.num_vertices, vertex_values);
 	fprintf(stdout, "\n\n");
 	#endif
 
