@@ -144,7 +144,11 @@ int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 		return -1;
 	}
 
-	ct_disjoint_set_reset(disjoint_set);
+	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	{
+		disjoint_set->parent[i] = i;
+		disjoint_set->rank[i] = 0;
+	}
 
 	return 0;
 }
@@ -164,30 +168,36 @@ void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set)
 	}
 }
 
-void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set)
-{
-	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
-	{
-		disjoint_set->parent[i] = i;
-		disjoint_set->rank[i] = 1;
-	}
-}
-
 void ct_disjoint_set_union(uint32_t v1, uint32_t v2, ct_disjoint_set_t *disjoint_set)
 {
 	uint32_t v1_root = ct_disjoint_set_find(v1, disjoint_set);
 	uint32_t v2_root = ct_disjoint_set_find(v2, disjoint_set);
 
-	// TODO - union by rank.
-	disjoint_set->parent[v1_root] = v2_root;
+	if (v1_root == v2_root) { return; }
+
+	if (disjoint_set->rank[v1_root] < disjoint_set->rank[v2_root])
+	{
+		disjoint_set->parent[v1_root] = v2_root;
+	}
+	else if (disjoint_set->rank[v1_root] > disjoint_set->rank[v2_root])
+	{
+		disjoint_set->parent[v2_root] = v1_root;
+	}
+	else
+	{
+		disjoint_set->parent[v2_root] = v1_root;
+		disjoint_set->rank[v1_root]++;
+	}
 }
 
 uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set)
 {
-	if (disjoint_set->parent[v] == v) { return v; }
-	return ct_disjoint_set_find(disjoint_set->parent[v], disjoint_set);
-
-	// TODO path compression.
+	uint32_t root = disjoint_set->parent[v];
+	if (disjoint_set->parent[root] != root)
+	{
+		return disjoint_set->parent[v] = ct_disjoint_set_find(root, disjoint_set);
+	}
+	return root;
 }
 
 #ifdef CT_DEBUG
@@ -209,18 +219,18 @@ void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *
 		return;
 	}
 
-	// If number of vertices exceeds 100, just print first 25 and last 25:
-	if (num_values > 100)
+	// If number of vertices exceeds 20, just print first 10 and last 10:
+	if (num_values > 20)
 	{
-		for (uint32_t i = 1; i < 25; i++)
+		for (uint32_t i = 1; i < 10; i++)
 		{
 			fprintf(file, "\n%d:\t%f", vertex_values[i].vertex, vertex_values[i].value);
 		}
 		fprintf(file, "\n. . . \n");
 
-		fprintf(file, "%d:\t%f", vertex_values[num_values - 25].vertex,
-					vertex_values[num_values - 25].value);
-		for (uint32_t i = num_values - 24; i < num_values; i++)
+		fprintf(file, "%d:\t%f", vertex_values[num_values - 10].vertex,
+					vertex_values[num_values - 10].value);
+		for (uint32_t i = num_values - 9; i < num_values; i++)
 		{
 			fprintf(file, "\n%d:\t%f", vertex_values[i].vertex, vertex_values[i].value);
 		}

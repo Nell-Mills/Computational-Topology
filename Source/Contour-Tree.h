@@ -62,7 +62,6 @@ int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 		char error_message[NM_MAX_ERROR_LENGTH]);
 void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set);
 
-void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set);
 void ct_disjoint_set_union(uint32_t v1, uint32_t v2, ct_disjoint_set_t *disjoint_set);
 uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set);
 
