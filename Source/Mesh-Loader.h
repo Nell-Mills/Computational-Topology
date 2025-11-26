@@ -9,7 +9,7 @@
 
 #include "Mesh.h"
 
-int mp_mesh_load(mp_mesh_t *mesh, char *name, char *path, char error_message[NM_MAX_ERROR_LENGTH]);
+int mp_mesh_load(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 int mp_mesh_load_obj(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 
 void tinyobj_file_reader_callback(void *ctx, const char *filename, const int is_mtl,

@@ -26,6 +26,7 @@
 
 /* @todo { Remove stddef dependency. size_t? } */
 #include <stddef.h>
+#include <SDL2/SDL_rwops.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -870,6 +871,7 @@ static int tinyobj_parse_and_index_mtl_file(tinyobj_material_t **materials_out,
 
   if (get_line_infos(buf, len, &line_infos, &num_lines) != 0) {
 		TINYOBJ_FREE(line_infos);
+    SDL_free(buf);
     return TINYOBJ_ERROR_EMPTY;
   }
 
@@ -1088,6 +1090,7 @@ static int tinyobj_parse_and_index_mtl_file(tinyobj_material_t **materials_out,
   (*num_materials_out) = num_materials;
   (*materials_out) = materials;
 
+  SDL_free(buf);
   return TINYOBJ_SUCCESS;
 }
 
@@ -1437,6 +1440,7 @@ int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
 
   /* 1. create line data */
   if (get_line_infos(buf, len, &line_infos, &num_lines) != 0) {
+    SDL_free(buf);
     return TINYOBJ_ERROR_EMPTY;
   }
 
@@ -1583,9 +1587,15 @@ int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
         size_t k = 0;
         for (k = 0; k < commands[i].num_f; k++) {
           tinyobj_vertex_index_t vi = commands[i].f[k];
+          #ifdef CT_INDEX_ZERO
+          int v_idx = vi.v_idx;
+          int vn_idx = vi.vn_idx;
+          int vt_idx = vi.vt_idx;
+          #else
           int v_idx = fixIndex(vi.v_idx, v_count);
           int vn_idx = fixIndex(vi.vn_idx, n_count);
           int vt_idx = fixIndex(vi.vt_idx, t_count);
+          #endif
           attrib->faces[f_count + k].v_idx = v_idx;
           attrib->faces[f_count + k].vn_idx = vn_idx;
           attrib->faces[f_count + k].vt_idx = vt_idx;
@@ -1704,6 +1714,7 @@ int tinyobj_parse_obj(tinyobj_attrib_t *attrib, tinyobj_shape_t **shapes,
   (*materials_out) = materials;
   (*num_materials_out) = num_materials;
 
+  SDL_free(buf);
   return TINYOBJ_SUCCESS;
 }
 

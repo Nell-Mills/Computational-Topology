@@ -40,9 +40,8 @@ typedef struct
 {
 	uint32_t from;
 	uint32_t to;
-	int64_t next;
+	uint32_t next;
 	int64_t other_half;
-	uint32_t face;
 } mp_edge_t;
 
 typedef struct
@@ -72,21 +71,25 @@ typedef struct
 	uint32_t num_uv_coordinates;
 	mp_uv_t *uv_coordinates;
 
-	int64_t num_edges;
+	uint32_t num_edges;
 	mp_edge_t *edges;
-	int64_t *first_edge;	// Per vertex.
+	uint32_t *first_edge;	// Per vertex.
 
 	uint8_t num_lod_levels;
 	uint32_t num_faces[NM_MAX_LOD_LEVELS];
 	mp_face_t *faces[NM_MAX_LOD_LEVELS];
 } mp_mesh_t;
 
-mp_mesh_t mp_mesh_initialise();
 int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 void mp_mesh_free(mp_mesh_t *mesh);
 int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
-void mp_mesh_free_edges(mp_mesh_t *mesh);
+
 int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
+uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree);
+uint32_t mp_mesh_get_edge_index(mp_edge_t *edge);
+
+int mp_mesh_edge_qsort_compare_from(const void *a, const void *b);
+int mp_mesh_edge_qsort_compare_low_high(const void *a, const void *b);
 
 #ifdef MP_DEBUG
 void mp_mesh_print_short(FILE *file, mp_mesh_t *mesh);

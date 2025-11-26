@@ -1,15 +1,14 @@
 #include "Mesh-Loader.h"
 
-int mp_mesh_load(mp_mesh_t *mesh, char *name, char *path, char error_message[NM_MAX_ERROR_LENGTH])
+int mp_mesh_load(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	*mesh = mp_mesh_initialise();
-	strcpy(mesh->name, name);
-	strcpy(mesh->path, path);
 	if (mp_mesh_load_obj(mesh, error_message))
 	{
 		mp_mesh_free(mesh);
 		return -1;
 	}
+	if (mp_mesh_calculate_edges(mesh, error_message)) { return -1; }
+	if (mp_mesh_check_manifold(mesh, error_message)) { return -1; }
 	return 0;
 }
 
@@ -42,6 +41,7 @@ int mp_mesh_load_obj(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	mesh->num_normals = attrib.num_normals;
 	mesh->num_colours = attrib.num_normals; // TinyOBJC doesn't use colours, so use normals.
 	mesh->num_uv_coordinates = attrib.num_texcoords;
+	mesh->num_edges = attrib.num_face_num_verts * 3;
 	for (int i = 0; i < NM_MAX_LOD_LEVELS; i++)
 	{
 		mesh->num_faces[i] = attrib.num_face_num_verts;
@@ -114,6 +114,7 @@ int mp_mesh_load_obj(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	}
 
 	tinyobj_free(&attrib, num_shapes, shapes, num_materials, materials);
+
 	return 0;
 }
 
