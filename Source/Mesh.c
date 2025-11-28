@@ -190,7 +190,7 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	uint32_t current_edge = 0;
 	for (uint32_t i = 0; i < mesh->num_vertices; i++)
 	{
-		while(edges[current_edge].from == i)
+		while (edges[current_edge].from == i)
 		{
 			vertex_degrees[i]++;
 			current_edge++;
@@ -214,39 +214,31 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree)
 {
 	uint32_t triangles_left = vertex_degree - 1; // Account for first triangle.
-
 	uint32_t first_edge = mesh->first_edge[vertex];
 	int64_t current_edge = mesh->first_edge[vertex];
+
 	while (1)
 	{
-		current_edge = mesh->edges[current_edge].next;
-		if (mesh->edges[current_edge].to != vertex)
-		{
-			current_edge = mesh->edges[current_edge].next;
-		}
-		current_edge = mesh->edges[current_edge].other_half;
+		current_edge = mp_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
+		current_edge = mp_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
 		if ((current_edge == mesh->first_edge[vertex]) || (current_edge == -1)) { break; }
 		if (triangles_left == 0) { return vertex_degree; }
 		triangles_left--;
 	}
 
-	if (current_edge == -1)
+	// If full cycle encountered, stop here:
+	if (current_edge != -1) { return triangles_left; }
+
+	// Walk other way:
+	current_edge = mesh->first_edge[vertex];
+	while (1)
 	{
-		// Walk other way:
-		current_edge = mesh->first_edge[vertex];
-		while(1)
-		{
-			first_edge = current_edge;
-			current_edge = mesh->edges[current_edge].other_half;
-			if (current_edge == -1) { break; }
-			current_edge = mesh->edges[current_edge].next;
-			if (mesh->edges[current_edge].from != vertex)
-			{
-				current_edge = mesh->edges[current_edge].next;
-			}
-			if (triangles_left == 0) { return vertex_degree; }
-			triangles_left--;
-		}
+		first_edge = current_edge;
+		current_edge = mp_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
+		if (current_edge == -1) { break; }
+		current_edge = mp_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
+		if (triangles_left == 0) { return vertex_degree; }
+		triangles_left--;
 	}
 
 	// Change first edge from vertex to actual first edge in fan (if boundary):
@@ -259,6 +251,42 @@ uint32_t mp_mesh_get_edge_index(mp_edge_t *edge)
 {
 	if ((edge->next % 3) == 0) { return (edge->next + 2); }
 	else { return (edge->next - 1); }
+}
+
+int64_t mp_mesh_get_next_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t edge)
+{
+	int64_t next_edge = edge;
+	if (mesh->edges[next_edge].from == vertex)
+	{
+		next_edge = mesh->edges[next_edge].next;
+		if (mesh->edges[next_edge].to != vertex)
+		{
+			next_edge = mesh->edges[next_edge].next;
+		}
+	}
+	else if (mesh->edges[next_edge].to == vertex)
+	{
+		next_edge = mesh->edges[next_edge].other_half;
+	}
+	return next_edge;
+}
+
+int64_t mp_mesh_get_previous_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t edge)
+{
+	int64_t previous_edge = edge;
+	if (mesh->edges[previous_edge].to == vertex)
+	{
+		previous_edge = mesh->edges[previous_edge].next;
+		if (mesh->edges[previous_edge].from != vertex)
+		{
+			previous_edge = mesh->edges[previous_edge].next;
+		}
+	}
+	else if (mesh->edges[previous_edge].from == vertex)
+	{
+		previous_edge = mesh->edges[previous_edge].other_half;
+	}
+	return previous_edge;
 }
 
 int mp_mesh_edge_qsort_compare_from(const void *a, const void *b)

@@ -87,6 +87,8 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree);
 uint32_t mp_mesh_get_edge_index(mp_edge_t *edge);
+int64_t mp_mesh_get_next_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t edge);
+int64_t mp_mesh_get_previous_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t edge);
 
 int mp_mesh_edge_qsort_compare_from(const void *a, const void *b);
 int mp_mesh_edge_qsort_compare_low_high(const void *a, const void *b);
