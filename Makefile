@@ -30,8 +30,8 @@ OUT	:= -o Computational-Topology
 MAIN	:= Computational-Topology.c
 DEPS	:= $(DEPS_PROJECT) $(DEPS_THIRD_PARTY)
 CFLAGS	:= -I Include -fopenmp
-LFLAGS	:= -lSDL2
-DEFINES	:=
+LFLAGS	:= -lSDL2 -lrt
+DEFINES	:= -D _XOPEN_SOURCE=600
 DEBUG	:= -D CT_DEBUG -D MP_DEBUG -g -O0
 
 release: $(MAIN)

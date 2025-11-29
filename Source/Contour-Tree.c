@@ -1,22 +1,13 @@
 #include "Contour-Tree.h"
 
-ct_contour_tree_t ct_contour_tree_initialise()
-{
-	ct_contour_tree_t contour_tree;
-	memset(&contour_tree, 0, sizeof(contour_tree));
-
-	contour_tree.nodes = NULL;
-
-	return contour_tree;
-}
-
 int ct_contour_tree_allocate(ct_contour_tree_t *contour_tree,
 		char error_message[NM_MAX_ERROR_LENGTH])
 {
 	ct_contour_tree_free(contour_tree);
 
 	contour_tree->nodes = malloc(contour_tree->num_nodes * sizeof(ct_contour_tree_node_t));
-	if (!contour_tree->nodes)
+	contour_tree->arcs = malloc(contour_tree->num_nodes * sizeof(ct_contour_tree_arc_t));
+	if (!contour_tree->nodes || !contour_tree->arcs)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for contour tree.");
@@ -33,14 +24,20 @@ void ct_contour_tree_free(ct_contour_tree_t *contour_tree)
 		free(contour_tree->nodes);
 		contour_tree->nodes = NULL;
 	}
+
+	if (contour_tree->arcs)
+	{
+		free(contour_tree->arcs);
+		contour_tree->arcs = NULL;
+	}
 }
 
 int ct_contour_tree_construct(ct_contour_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_vertex_value_t *vertex_values, char error_message[NM_MAX_ERROR_LENGTH])
 {
 	// Note that this expects an ordered set of vertex values.
-	ct_contour_tree_t join_tree = ct_contour_tree_initialise();
-	ct_contour_tree_t split_tree = ct_contour_tree_initialise();
+	ct_contour_tree_t join_tree = {0};
+	ct_contour_tree_t split_tree = {0};
 
 	if (mesh->num_vertices < 3)
 	{
@@ -48,10 +45,6 @@ int ct_contour_tree_construct(ct_contour_tree_t *contour_tree, mp_mesh_t *mesh,
 			"Mesh \"%s\" has too few vertices to build a contour tree.", mesh->name);
 		goto error;
 	}
-
-	int has_edges = 0;
-	if (mesh->edges) { has_edges = 1; }
-	if (!has_edges && mp_mesh_calculate_edges(mesh, error_message)) { goto error; }
 
 	contour_tree->num_nodes = mesh->num_vertices;
 	join_tree.num_nodes = mesh->num_vertices;
@@ -70,7 +63,6 @@ int ct_contour_tree_construct(ct_contour_tree_t *contour_tree, mp_mesh_t *mesh,
 	// Cleanup, success:
 	ct_contour_tree_free(&join_tree);
 	ct_contour_tree_free(&split_tree);
-	if (!has_edges) { mp_mesh_free_edges(mesh); }
 	return 0;
 
 	// Cleanup, failure:
@@ -78,13 +70,70 @@ int ct_contour_tree_construct(ct_contour_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_contour_tree_free(contour_tree);
 	ct_contour_tree_free(&join_tree);
 	ct_contour_tree_free(&split_tree);
-	if (!has_edges) { mp_mesh_free_edges(mesh); }
 	return -1;
 }
 
 int ct_contour_tree_join(ct_contour_tree_t *join_tree, mp_mesh_t *mesh,
 	ct_vertex_value_t *vertex_values, char error_message[NM_MAX_ERROR_LENGTH])
 {
+	// Indexing into disjoint set via original vertex index, NOT sorted index.
+	ct_disjoint_set_t disjoint_set = {0};
+	disjoint_set.num_elements = mesh->num_vertices;
+	if (ct_disjoint_set_allocate(&disjoint_set, error_message)) { return -1; }
+
+	int64_t current_edge;
+	uint32_t current_vertex;
+	uint32_t current_component;
+	uint32_t adjacent_vertex;
+	uint32_t adjacent_component;
+	uint32_t previous_adjacent_vertex;
+
+	for (int64_t i = (mesh->num_vertices - 1); i >= 0; i--)
+	{
+		current_vertex = vertex_values[i].vertex;
+		current_edge = mesh->first_edge[current_vertex];
+		adjacent_vertex = current_vertex;
+		while (1)
+		{
+			previous_adjacent_vertex = adjacent_vertex;
+			if (mesh->edges[current_edge].from == current_vertex)
+			{
+				adjacent_vertex = mesh->edges[current_edge].to;
+			}
+			else { adjacent_vertex = mesh->edges[current_edge].from; }
+
+			current_component = ct_disjoint_set_find(current_vertex, &disjoint_set);
+			adjacent_component = ct_disjoint_set_find(adjacent_vertex, &disjoint_set);
+
+			if ((vertex_values[adjacent_vertex].vertex_map > i) &&
+				(current_component != adjacent_component) &&
+				(adjacent_vertex != previous_adjacent_vertex))
+			{
+				ct_disjoint_set_union(current_component, adjacent_component,
+									&disjoint_set);
+				// TODO add edge to join tree.
+				adjacent_component = ct_disjoint_set_find(adjacent_vertex,
+									&disjoint_set);
+				disjoint_set.lowest[adjacent_component] = current_vertex;
+			}
+
+			current_edge = mp_mesh_get_next_vertex_edge(mesh, current_vertex,
+									current_edge);
+			if (current_edge == -1) { break; }
+			if (current_edge == mesh->first_edge[current_vertex]) { break; }
+			if (mesh->edges[current_edge].other_half ==
+				mesh->first_edge[current_vertex])
+			{
+				break;
+			}
+		}
+	}
+
+	#ifdef CT_DEBUG
+	ct_disjoint_set_print(stdout, &disjoint_set);
+	#endif
+
+	ct_disjoint_set_free(&disjoint_set);
 	return 0;
 }
 
@@ -112,43 +161,28 @@ int ct_qsort_compare(const void *a, const void *b)
 void ct_vertex_values_sort(uint32_t num_values, ct_vertex_value_t *vertex_values)
 {
 	qsort(vertex_values, num_values, sizeof(vertex_values[0]), ct_qsort_compare);
-}
 
-ct_disjoint_set_t ct_disjoint_set_initialise()
-{
-	ct_disjoint_set_t disjoint_set;
-	memset(&disjoint_set, 0, sizeof(disjoint_set));
-
-	disjoint_set.parent	= NULL;
-	disjoint_set.rank	= NULL;
-
-	return disjoint_set;
+	// Map each vertex value to original vertex index:
+	for (uint32_t i = 0; i < num_values; i++)
+	{
+		vertex_values[vertex_values[i].vertex].vertex_map = i;
+	}
 }
 
 int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 		char error_message[NM_MAX_ERROR_LENGTH])
 {
-	if (disjoint_set->num_elements < 1)
-	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Tried to allocate disjoint set with no elements.");
-		return -1;
-	}
-
 	disjoint_set->parent = malloc(disjoint_set->num_elements * sizeof(uint32_t));
 	disjoint_set->rank = malloc(disjoint_set->num_elements * sizeof(uint32_t));
-	if (!disjoint_set->parent || !disjoint_set->rank)
+	disjoint_set->lowest = malloc(disjoint_set->num_elements * sizeof(uint32_t));
+	if (!disjoint_set->parent || !disjoint_set->rank || !disjoint_set->lowest)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for disjoint set.");
 		return -1;
 	}
 
-	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
-	{
-		disjoint_set->parent[i] = i;
-		disjoint_set->rank[i] = 0;
-	}
+	ct_disjoint_set_reset(disjoint_set);
 
 	return 0;
 }
@@ -165,6 +199,22 @@ void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set)
 	{
 		free(disjoint_set->rank);
 		disjoint_set->rank = NULL;
+	}
+
+	if (disjoint_set->lowest)
+	{
+		free(disjoint_set->lowest);
+		disjoint_set->lowest = NULL;
+	}
+}
+
+void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set)
+{
+	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	{
+		disjoint_set->parent[i] = i;
+		disjoint_set->rank[i] = 0;
+		disjoint_set->lowest[i] = i;
 	}
 }
 
@@ -211,7 +261,8 @@ void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *
 	if (num_values > 0)
 	{
 		fprintf(file, "Ordered vertices:\n");
-		fprintf(file, "%d:\t%f", vertex_values[0].vertex, vertex_values[0].value);
+		fprintf(file, "%u:\t%f\t(%u)", vertex_values[0].vertex, vertex_values[0].value,
+								vertex_values[0].vertex_map);
 	}
 	else
 	{
@@ -224,23 +275,40 @@ void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *
 	{
 		for (uint32_t i = 1; i < 10; i++)
 		{
-			fprintf(file, "\n%d:\t%f", vertex_values[i].vertex, vertex_values[i].value);
+			fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[i].vertex,
+				vertex_values[i].value, vertex_values[i].vertex_map);
 		}
 		fprintf(file, "\n. . . \n");
 
-		fprintf(file, "%d:\t%f", vertex_values[num_values - 10].vertex,
-					vertex_values[num_values - 10].value);
+		fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[num_values - 10].vertex,
+					vertex_values[num_values - 10].value,
+					vertex_values[num_values - 10].vertex_map);
 		for (uint32_t i = num_values - 9; i < num_values; i++)
 		{
-			fprintf(file, "\n%d:\t%f", vertex_values[i].vertex, vertex_values[i].value);
+			fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[i].vertex,
+				vertex_values[i].value, vertex_values[i].vertex_map);
 		}
 	}
 	else
 	{
 		for (uint32_t i = 1; i < num_values; i++)
 		{
-			fprintf(file, "\n%d:\t%f", vertex_values[i].vertex, vertex_values[i].value);
+			fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[i].vertex,
+				vertex_values[i].value, vertex_values[i].vertex_map);
 		}
+	}
+}
+
+void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set)
+{
+	fprintf(file, "Number of elements: %u\n", disjoint_set->num_elements);
+	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	{
+		// Flatten structure and only print root elements:
+		ct_disjoint_set_find(i, disjoint_set);
+		if (disjoint_set->parent[i] != i) { continue; }
+		fprintf(file, "Vertex: %u\t-->\tParent: %u,\tRank: %u,\tLowest: %u\n", i,
+			disjoint_set->parent[i], disjoint_set->rank[i], disjoint_set->lowest[i]);
 	}
 }
 #endif

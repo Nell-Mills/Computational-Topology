@@ -9,10 +9,16 @@
 #include <NM-Config/Config.h>
 #include <Mesh-Processing/Mesh.h>
 
+#define CT_NODE_TYPE_REGULAR	0
+#define CT_NODE_TYPE_MINIMUM	1
+#define CT_NODE_TYPE_MAXIMUM	2
+#define CT_NODE_TYPE_SADDLE	3
+
 typedef struct
 {
 	float value;
 	uint32_t vertex;
+	uint32_t vertex_map;
 } ct_vertex_value_t;
 
 typedef struct
@@ -39,9 +45,9 @@ typedef struct
 	uint32_t num_elements;
 	uint32_t *parent;
 	uint32_t *rank;
+	uint32_t *lowest;
 } ct_disjoint_set_t;
 
-ct_contour_tree_t ct_contour_tree_initialise();
 int ct_contour_tree_allocate(ct_contour_tree_t *tree, char error_message[NM_MAX_ERROR_LENGTH]);
 void ct_contour_tree_free(ct_contour_tree_t *tree);
 
@@ -57,17 +63,17 @@ int ct_contour_tree_merge(ct_contour_tree_t *contour_tree, ct_contour_tree_t *jo
 int ct_qsort_compare(const void *a, const void *b);
 void ct_vertex_values_sort(uint32_t num_values, ct_vertex_value_t *vertex_values);
 
-ct_disjoint_set_t ct_disjoint_set_initialise();
 int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 		char error_message[NM_MAX_ERROR_LENGTH]);
 void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set);
-
+void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set);
 void ct_disjoint_set_union(uint32_t v1, uint32_t v2, ct_disjoint_set_t *disjoint_set);
 uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set);
 
 #ifdef CT_DEBUG
 void ct_contour_tree_print(FILE *file, ct_contour_tree_t *contour_tree);
 void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *vertex_values);
+void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set);
 #endif
 
 #endif
