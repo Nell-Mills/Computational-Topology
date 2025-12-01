@@ -2,15 +2,53 @@
 
 int mp_mesh_load(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	if (mp_mesh_load_obj(mesh, error_message))
+	// Get extension:
+	char extension[NM_MAX_PATH_LENGTH];
+	int current_position = strlen(mesh->path) - 1;
+	while (1)
 	{
-		mp_mesh_free(mesh);
+		if (mesh->path[current_position] == '.') { break; }
+		if (current_position == 0)
+		{
+			snprintf(error_message, NM_MAX_ERROR_LENGTH,
+				"File has no extension for mesh \"%s\".", mesh->name);
+			return -1;
+		}
+		current_position--;
+	}
+	strcpy(extension, &(mesh->path[current_position]));
+	current_position = 0;
+	while (extension[current_position] != '\0')
+	{
+		extension[current_position] = tolower(extension[current_position]);
+		current_position++;
+	}
+
+	if (!strcmp(extension, ".obj"))
+	{
+		if (mp_mesh_load_obj(mesh, error_message)) { return -1; }
+	}
+	else if (!strcmp(extension, ".txt"))
+	{
+		if (mp_mesh_load_voxels(mesh, error_message)) { return -1; }
+	}
+	else
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"File extension \"%s\" not recognised for mesh \"%s\".",
+			extension, mesh->name);
 		return -1;
 	}
+
 	if (mp_mesh_calculate_edges(mesh, error_message)) { return -1; }
 	if (mp_mesh_check_manifold(mesh, error_message)) { return -1; }
+
 	return 0;
 }
+
+/**************
+ * OBJ meshes *
+ **************/
 
 int mp_mesh_load_obj(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
@@ -114,8 +152,12 @@ int mp_mesh_load_obj(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	}
 
 	tinyobj_free(&attrib, num_shapes, shapes, num_materials, materials);
-
 	return 0;
+}
+
+void mp_mesh_write_obj(FILE *file, mp_mesh_t *mesh)
+{
+	// TODO
 }
 
 void tinyobj_file_reader_callback(void *ctx, const char *filename, const int is_mtl,
@@ -131,3 +173,181 @@ void tinyobj_free(tinyobj_attrib_t *attrib, size_t num_shapes, tinyobj_shape_t *
 	tinyobj_shapes_free(shapes, num_shapes);
 	tinyobj_materials_free(materials, num_materials);
 }
+
+/****************
+ * Voxel meshes *
+ ****************/
+
+int mp_mesh_load_voxels(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+{
+	/* Loading 3D data of the following format (making strict assumptions):
+	 * X Y Z
+	 * f . f
+	 * . . .
+	 * f . f
+	 *
+	 * f . f
+	 * . . .
+	 * f . f
+	 *
+	 * Where X Y and Z are the number of voxels in each dimension, and are
+	 * followed by the data in matrix form (Z slices, 1 float per voxel). */
+
+	FILE *file = fopen(mesh->path, "r");
+	if (!file)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not open file \"%s\" for mesh \"%s\".", mesh->path, mesh->name);
+		return -1;
+	}
+
+	fseek(file, 0, SEEK_END);
+	long data_size = ftell(file);
+	rewind(file);
+
+	char *data = malloc(data_size + 1);
+	if (!data)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate data buffer memory for mesh \"%s\".", mesh->name);
+		fclose(file);
+		return -1;
+	}
+	fread(data, data_size, 1, file);
+	fclose(file);
+
+	char *position = data;
+	char *end = data + data_size;
+
+	// Parse voxel dimensions:
+	uint32_t dimensions[3] = { 0, 0, 0 };
+	for (int i = 0; i < 3; i++)
+	{
+		while ((position < end) && isspace(*position)) { position++; }
+		while ((position < end) && (*position >= '0') && (*position <= '9'))
+		{
+			dimensions[i] = (dimensions[i] * 10) + (*position - '0');
+			position++;
+		}
+	}
+
+	if (!dimensions[0] || !dimensions[1] || !dimensions[2])
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Voxel X, Y or Z dimension is 0 for mesh \"%s\".", mesh->name);
+		free(data);
+		return -1;
+	}
+
+	// Parse voxel data:
+	uint32_t num_voxels = dimensions[0] * dimensions[1] * dimensions[2];
+	float *voxels = malloc(num_voxels * sizeof(float));
+	if (!voxels)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate voxel memory for mesh \"%s\".", mesh->name);
+		free(data);
+		return -1;
+	}
+	memset(voxels, 0, num_voxels * sizeof(float));
+
+	for (uint32_t i = 0; i < num_voxels; i++)
+	{
+		if (position == end)
+		{
+			// Prematurely ran out of values:
+			snprintf(error_message, NM_MAX_ERROR_LENGTH,
+				"Not enough voxel values in file for mesh \"%s\".\n", mesh->name);
+			free(data);
+			free(voxels);
+			return -1;
+		}
+
+		float negative = 1.f;
+		while ((position < end) && isspace(*position)) { position++; }
+		if ((position < end) && (*position == '-'))
+		{
+			negative = -1.f;
+		}
+		while ((position < end) && (*position >= '0') && (*position <= '9'))
+		{
+			voxels[i] = (voxels[i] * 10.f) + ((*position - '0') * 1.f);
+			position++;
+		}
+		if ((position < end) && (*position == '.'))
+		{
+			position++;
+			float decimal = 0.f;
+			float multiplier = 1.f;
+			while((position < end) && (*position >= '0') && (*position <= '9'))
+			{
+				decimal = (decimal * 10.f) + ((*position - '0') * 1.f);
+				multiplier *= 10.f;
+				position++;
+			}
+			voxels[i] += decimal / multiplier;
+		}
+		voxels[i] *= negative;
+	}
+
+	#ifdef MP_DEBUG
+	mp_voxels_print(stdout, dimensions, voxels);
+	fprintf(stdout, "\n");
+	#endif
+
+	// TODO - use marching cubes to get mesh data. Put float data into uv coordinates.
+
+	if (mp_mesh_allocate(mesh, error_message))
+	{
+		free(data);
+		free(voxels);
+		return -1;
+	}
+
+	free(data);
+	free(voxels);
+	return 0;
+}
+
+uint32_t mp_get_voxel_index(uint32_t coordinates[3], uint32_t dimensions[3])
+{
+	// X, Y, Z = column, row, slice.
+	return ((dimensions[0] * dimensions[1] * coordinates[2]) +
+		(dimensions[0] * coordinates[1]) + coordinates[0]);
+}
+
+#ifdef MP_DEBUG
+void mp_voxels_print(FILE *file, uint32_t dimensions[3], float *voxels)
+{
+	fprintf(file, "********************\n");
+	fprintf(file, "* Voxel debug info *\n");
+	fprintf(file, "********************\n\n");
+
+	fprintf(file, "Dimensions --> X: %u, Y: %u, Z: %u\n",
+		dimensions[0], dimensions[1], dimensions[2]);
+
+	uint32_t coordinates[3] = { 0, 0, 0 };
+	uint32_t index;
+	for (uint32_t z = 0; z < dimensions[2]; z++)
+	{
+		fprintf(file, "\n");
+		for (uint32_t y = 0; y < dimensions[1]; y++)
+		{
+			index = mp_get_voxel_index(coordinates, dimensions);
+			fprintf(file, "%.3f", voxels[index]);
+			coordinates[0]++;
+			for (uint32_t x = 1; x < dimensions[0]; x++)
+			{
+				index = mp_get_voxel_index(coordinates, dimensions);
+				fprintf(file, "\t%.3f", voxels[index]);
+				coordinates[0]++;
+			}
+			fprintf(file, "\n");
+			coordinates[1]++;
+			coordinates[0] = 0;
+		}
+		coordinates[2]++;
+		coordinates[1] = 0;
+	}
+}
+#endif

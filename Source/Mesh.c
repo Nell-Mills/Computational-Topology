@@ -2,6 +2,15 @@
 
 int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
+	if ((mesh->num_vertices < 1) || (mesh->num_normals < 1) || (mesh->num_colours < 1) ||
+		(mesh->num_uv_coordinates < 1) || (mesh->num_edges < 1) || (mesh->num_faces[0] < 1))
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has fewer attributes than required for allocation.",
+			mesh->name);
+		return -1;
+	}
+
 	mp_mesh_free(mesh);
 	mesh->num_lod_levels = 1;
 
@@ -17,6 +26,7 @@ int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for mesh \"%s\".", mesh->name);
+		mp_mesh_free(mesh);
 		return -1;
 	}
 
@@ -82,8 +92,103 @@ void mp_mesh_free(mp_mesh_t *mesh)
 	}
 }
 
+int mp_mesh_check_validity(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+{
+	if (mesh->num_vertices < 3)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has fewer than 3 vertices.", mesh->name);
+		return -1;
+	}
+	if (!mesh->vertices)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no memory allocated for vertices.", mesh->name);
+		return -1;
+	}
+
+	if (mesh->num_normals < 1)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no normals.", mesh->name);
+		return -1;
+	}
+	if (!mesh->normals)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no memory allocated for normals.", mesh->name);
+		return -1;
+	}
+
+	if (mesh->num_colours < 1)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no colours.", mesh->name);
+		return -1;
+	}
+	if (!mesh->colours)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no memory allocated for colours.", mesh->name);
+		return -1;
+	}
+
+	if (mesh->num_uv_coordinates < 1)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no UV coordinates.", mesh->name);
+		return -1;
+	}
+	if (!mesh->uv_coordinates)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no memory allocated for UV coordinates.", mesh->name);
+		return -1;
+	}
+
+	if (mesh->num_edges < 3)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has fewer than 3 edges.", mesh->name);
+		return -1;
+	}
+	if (!mesh->edges)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no memory allocated for edges.", mesh->name);
+		return -1;
+	}
+	if (!mesh->first_edge)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" has no memory allocated for first edge.", mesh->name);
+		return -1;
+	}
+
+	for (uint8_t i = 0; i < mesh->num_lod_levels; i++)
+	{
+		if (mesh->num_faces[i] < 1)
+		{
+			snprintf(error_message, NM_MAX_ERROR_LENGTH,
+				"Mesh \"%s\" has no faces for LOD %u.", mesh->name, i);
+			return -1;
+		}
+		if (!mesh->faces[i])
+		{
+			snprintf(error_message, NM_MAX_ERROR_LENGTH,
+				"Mesh \"%s\" has no memory allocated for faces for LOD %u.",
+				mesh->name, i);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
 int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
+	if (mp_mesh_check_validity(mesh, error_message)) { return -1; }
+
 	for (uint32_t i = 0; i < mesh->num_faces[0]; i++)
 	{
 		for (int j = 0; j < 3; j++)
@@ -128,18 +233,15 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 
 int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	int return_value = 0;
-	uint8_t is_manifold = 1;
-	mp_edge_t *edges = NULL;
-	uint32_t *vertex_degrees = NULL;
+	if (mp_mesh_check_validity(mesh, error_message)) { return -1; }
 
-	edges = malloc(mesh->num_edges * sizeof(mp_edge_t));
+	uint8_t is_manifold = 1;
+	mp_edge_t *edges = malloc(mesh->num_edges * sizeof(mp_edge_t));
 	if (!edges)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for edge sorting on mesh \"%s\".", mesh->name);
-		return_value = -1;
-		goto cleanup;
+		return -1;
 	}
 	memcpy(edges, mesh->edges, mesh->num_edges * sizeof(mp_edge_t));
 
@@ -160,7 +262,11 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 		}
 	}
 	mesh->is_manifold = is_manifold;
-	if (!mesh->is_manifold) { goto cleanup; }
+	if (!mesh->is_manifold)
+	{
+		free(edges);
+		return 0;
+	}
 
 	/*******************
 	 * Edge pairs test *
@@ -177,13 +283,13 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	// Sort edges by "from":
 	qsort(edges, mesh->num_edges, sizeof(edges[0]), mp_mesh_edge_qsort_compare_from);
 
-	vertex_degrees = malloc(mesh->num_vertices * sizeof(uint32_t));
+	uint32_t *vertex_degrees = malloc(mesh->num_vertices * sizeof(uint32_t));
 	if (!vertex_degrees)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for vertex degrees on mesh \"%s\".", mesh->name);
-		return_value = -1;
-		goto cleanup;
+		free(edges);
+		return -1;
 	}
 	memset(vertex_degrees, 0, mesh->num_vertices * sizeof(uint32_t));
 
@@ -205,10 +311,9 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	}
 	mesh->is_manifold = is_manifold;
 
-	cleanup:
-	if (vertex_degrees) { free(vertex_degrees); }
-	if (edges) { free(edges); }
-	return return_value;
+	free(vertex_degrees);
+	free(edges);
+	return 0;
 }
 
 uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree)
@@ -268,6 +373,7 @@ int64_t mp_mesh_get_next_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t 
 	{
 		next_edge = mesh->edges[next_edge].other_half;
 	}
+
 	return next_edge;
 }
 
@@ -286,6 +392,7 @@ int64_t mp_mesh_get_previous_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint3
 	{
 		previous_edge = mesh->edges[previous_edge].other_half;
 	}
+
 	return previous_edge;
 }
 

@@ -3,13 +3,13 @@
 Include Mesh-Processing.h. For debug, define MP_DEBUG when compiling.
 
 ## Functionality implemented:
-- Mesh loader: currently loads in .obj files using [TinyOBJLoaderC](https://github.com/syoyo/tinyobjloader-c).
+- Mesh loader: currently loads in .obj files using [TinyOBJLoaderC](https://github.com/syoyo/tinyobjloader-c). Can also load voxel data in a restricted format.
 - Edge/connectivity information:
     - Vertices (from, to).
     - Next edge in face.
     - Other half edge. Boundary edges have a value of -1 here.
     - Edges are ordered by face, so face index is implicit.
-- Manifold check: allows for boundary edges (semicircle vertex neighbourhoods).
+- Manifold check: allows for boundary edges.
 
 ## Compilation:
 Optionally compile with -fopenmp.  

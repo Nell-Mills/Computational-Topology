@@ -82,6 +82,7 @@ typedef struct
 
 int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 void mp_mesh_free(mp_mesh_t *mesh);
+int mp_mesh_check_validity(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
 
 int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
