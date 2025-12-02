@@ -41,7 +41,7 @@ typedef struct
 	uint32_t num_elements;
 	uint32_t *parent;
 	uint32_t *rank;
-	uint32_t *lowest; // Or highest for the split tree... maybe rename this.
+	uint32_t *extremum; // Lowest in join tree, highest in split tree.
 } ct_disjoint_set_t;
 
 // Contour/merge trees:

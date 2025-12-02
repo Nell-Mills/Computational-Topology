@@ -60,7 +60,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_tree_t split_tree = {0};
 	ct_disjoint_set_t disjoint_set = {0};
 	uint32_t *leaf_queue = NULL;
-	uint8_t *leaves_queued = NULL;
 
 	// Indexing into disjoint set via original vertex index, NOT sorted index.
 	disjoint_set.num_elements = mesh->num_vertices;
@@ -79,15 +78,15 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_merge_tree_construct(&split_tree, mesh, 0, vertex_values, &disjoint_set);
 
 	#ifdef CT_DEBUG
-	fprintf(debug_output, "\n\n**************\n");
-	fprintf(debug_output, "* Join Tree: *\n");
-	fprintf(debug_output, "**************\n\n");
-	ct_tree_print(debug_output, &join_tree);
+	fprintf(stdout, "\n\n**************\n");
+	fprintf(stdout, "* Join Tree: *\n");
+	fprintf(stdout, "**************\n\n");
+	ct_tree_print(stdout, &join_tree);
 
-	fprintf(debug_output, "\n\n***************\n");
-	fprintf(debug_output, "* Split Tree: *\n");
-	fprintf(debug_output, "***************\n\n");
-	ct_tree_print(debug_output, &split_tree);
+	fprintf(stdout, "\n\n***************\n");
+	fprintf(stdout, "* Split Tree: *\n");
+	fprintf(stdout, "***************\n\n");
+	ct_tree_print(stdout, &split_tree);
 	#endif
 
 	/* There is exactly one arc leading down/up from each node in the join/split tree except
@@ -128,8 +127,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	uint32_t num_leaves = 0;
 	uint32_t first_leaf = 0;
 	leaf_queue = malloc(join_tree.num_nodes * sizeof(uint32_t));
-	leaves_queued = malloc(join_tree.num_nodes * sizeof(uint8_t));
-	if (!leaf_queue || !leaves_queued)
+	if (!leaf_queue)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for leaf queue.");
@@ -138,13 +136,11 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	for (uint32_t i = 0; i < join_tree.num_nodes; i++)
 	{
 		contour_tree->nodes[i].vertex = join_tree.nodes[i].vertex;
-		leaves_queued[i] = 0;
 		if (((join_tree.nodes[i].degree[0] + split_tree.nodes[i].degree[1]) == 1) ||
 			(!join_tree.nodes[i].degree[0] && !split_tree.nodes[i].degree[0]) ||
 			(!join_tree.nodes[i].degree[1] && !split_tree.nodes[i].degree[1]))
 		{
 			leaf_queue[num_leaves] = i;
-			leaves_queued[i] = 1;
 			num_leaves++;
 		}
 	}
@@ -156,12 +152,12 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	while (num_leaves > 1)
 	{
 		leaf = leaf_queue[first_leaf];
-		leaves_queued[leaf] = 0;
 		first_leaf++;
 		num_leaves--;
 
 		if (!join_tree.nodes[leaf].degree[0] && !split_tree.nodes[leaf].degree[1])
 		{
+			// Meshes with multiple disconnected components need this.
 			continue;
 		}
 
@@ -171,7 +167,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 			join_tree.nodes[leaf].degree[1] -= 1;
 			join_tree.nodes[node].degree[0] -= 1;
 
-			// Note - contour tree arcs point from lower to higher so swap from and to.
+			// Swap "from" and "to" so contour tree arcs point from low to high.
 			contour_tree->arcs[contour_tree->num_arcs].from = node;
 			contour_tree->arcs[contour_tree->num_arcs].to = leaf;
 			contour_tree->num_arcs++;
@@ -225,11 +221,9 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 			}
 		}
 
-		if (((join_tree.nodes[node].degree[0] + split_tree.nodes[node].degree[1]) == 1) &&
-									!leaves_queued[node])
+		if ((join_tree.nodes[node].degree[0] + split_tree.nodes[node].degree[1]) == 1)
 		{
 			leaf_queue[first_leaf + num_leaves] = node;
-			leaves_queued[node] = 1;
 			num_leaves++;
 		}
 	}
@@ -243,6 +237,18 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	fprintf(stdout, "* Contour Tree: *\n");
 	fprintf(stdout, "*****************\n\n");
 	ct_tree_print(stdout, contour_tree);
+
+	printf("\nDuplicates test beginning:\n");
+	for (uint32_t i = 1; i < contour_tree->num_arcs; i++)
+	{
+		if ((contour_tree->arcs[i].from == contour_tree->arcs[i - 1].from) &&
+			(contour_tree->arcs[i].to == contour_tree->arcs[i - 1].to))
+		{
+			printf("Duplicate arc from %u to %u\n", contour_tree->arcs[i].from,
+								contour_tree->arcs[i].to);
+		}
+	}
+	printf("\nDuplicates test finished.\n\n");
 	#endif
 
 	// Cleanup, success:
@@ -250,7 +256,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_tree_free(&split_tree);
 	ct_disjoint_set_free(&disjoint_set);
 	free(leaf_queue);
-	free(leaves_queued);
 	return 0;
 
 	// Cleanup, failure:
@@ -260,7 +265,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_tree_free(&split_tree);
 	ct_disjoint_set_free(&disjoint_set);
 	if (leaf_queue) { free(leaf_queue); }
-	if (leaves_queued) { free(leaves_queued); }
 	return -1;
 }
 
@@ -326,7 +330,7 @@ void ct_merge_tree_construct(ct_tree_t *merge_tree, mp_mesh_t *mesh, uint32_t st
 
 				// Arcs go from high to low in join tree, low to high in split tree:
 				merge_tree->arcs[merge_tree->num_arcs].from =
-					vertex_values[disjoint_set->lowest[
+					vertex_values[disjoint_set->extremum[
 					adjacent_component]].vertex_map;
 				merge_tree->arcs[merge_tree->num_arcs].to = i;
 				merge_tree->nodes[merge_tree->arcs[merge_tree->num_arcs].
@@ -336,7 +340,7 @@ void ct_merge_tree_construct(ct_tree_t *merge_tree, mp_mesh_t *mesh, uint32_t st
 
 				adjacent_component = ct_disjoint_set_find(adjacent_vertex,
 									disjoint_set);
-				disjoint_set->lowest[adjacent_component] = current_vertex;
+				disjoint_set->extremum[adjacent_component] = current_vertex;
 			}
 
 			current_edge = mp_mesh_get_next_vertex_edge(mesh, current_vertex,
@@ -433,8 +437,8 @@ int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 {
 	disjoint_set->parent = malloc(disjoint_set->num_elements * sizeof(uint32_t));
 	disjoint_set->rank = malloc(disjoint_set->num_elements * sizeof(uint32_t));
-	disjoint_set->lowest = malloc(disjoint_set->num_elements * sizeof(uint32_t));
-	if (!disjoint_set->parent || !disjoint_set->rank || !disjoint_set->lowest)
+	disjoint_set->extremum = malloc(disjoint_set->num_elements * sizeof(uint32_t));
+	if (!disjoint_set->parent || !disjoint_set->rank || !disjoint_set->extremum)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for disjoint set.");
@@ -460,10 +464,10 @@ void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set)
 		disjoint_set->rank = NULL;
 	}
 
-	if (disjoint_set->lowest)
+	if (disjoint_set->extremum)
 	{
-		free(disjoint_set->lowest);
-		disjoint_set->lowest = NULL;
+		free(disjoint_set->extremum);
+		disjoint_set->extremum = NULL;
 	}
 }
 
@@ -473,7 +477,7 @@ void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set)
 	{
 		disjoint_set->parent[i] = i;
 		disjoint_set->rank[i] = 0;
-		disjoint_set->lowest[i] = i;
+		disjoint_set->extremum[i] = i;
 	}
 }
 
@@ -684,8 +688,8 @@ void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set)
 	{
 		if (disjoint_set->parent[i] != i) { continue; }
 		unique_elements++;
-		fprintf(file, "Vertex: %u\t-->\tParent: %u,\tRank: %u,\tLowest: %u\n", i,
-			disjoint_set->parent[i], disjoint_set->rank[i], disjoint_set->lowest[i]);
+		fprintf(file, "Vertex: %u\t-->\tParent: %u,\tRank: %u,\tExtremum: %u\n", i,
+			disjoint_set->parent[i], disjoint_set->rank[i], disjoint_set->extremum[i]);
 
 		// Only print up to 25 unique elements:
 		if (unique_elements == 25) { break; }
