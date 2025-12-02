@@ -55,14 +55,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 		return -1;
 	}
 
-	#ifdef CT_DEBUG
-	int print_intermediate = 1; // Print leaf queue and significant events every iteration.
-	int print_intermediate_full = 0; // Print full join and split trees every iteration.
-	FILE *debug_output = stdout;
-	//FILE *debug_output = fopen("Output.txt", "w");
-	//if (!debug_output) { return -1; }
-	#endif
-
 	// Note that this expects an ordered set of vertex values.
 	ct_tree_t join_tree = {0};
 	ct_tree_t split_tree = {0};
@@ -87,26 +79,15 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_merge_tree_construct(&split_tree, mesh, 0, vertex_values, &disjoint_set);
 
 	#ifdef CT_DEBUG
-	float node_labels[18] = { 1.f, 2.f, 2.1f, 3.f, 4.f, 4.6f, 4.9f, 5.f,
-		6.f, 6.1f, 6.5f, 6.9f, 7.f, 7.2f, 8.f, 8.3f, 9.f, 10.f };
-
-	contour_tree->num_nodes = 18;
-	join_tree.num_nodes = 18;
-	split_tree.num_nodes = 18;
-	if (ct_tree_allocate(contour_tree, error_message)) { goto error; }
-	if (ct_tree_allocate(&join_tree, error_message)) { goto error; }
-	if (ct_tree_allocate(&split_tree, error_message)) { goto error; }
-	ct_merge_trees_build_test_case(&join_tree, &split_tree);
-
 	fprintf(debug_output, "\n\n**************\n");
 	fprintf(debug_output, "* Join Tree: *\n");
 	fprintf(debug_output, "**************\n\n");
-	ct_merge_trees_print_test_case(debug_output, &join_tree);
+	ct_tree_print(debug_output, &join_tree);
 
 	fprintf(debug_output, "\n\n***************\n");
 	fprintf(debug_output, "* Split Tree: *\n");
 	fprintf(debug_output, "***************\n\n");
-	ct_merge_trees_print_test_case(debug_output, &split_tree);
+	ct_tree_print(debug_output, &split_tree);
 	#endif
 
 	/* There is exactly one arc leading down/up from each node in the join/split tree except
@@ -174,18 +155,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	uint32_t other_node;
 	while (num_leaves > 1)
 	{
-		#ifdef CT_DEBUG
-		if (print_intermediate)
-		{
-			fprintf(debug_output, "\nLeaf Queue:\n");
-			for (uint32_t i = first_leaf; i < (first_leaf + num_leaves); i++)
-			{
-				fprintf(debug_output, "%.1f, ", node_labels[leaf_queue[i]]);
-			}
-			fprintf(debug_output, "\n");
-		}
-		#endif
-
 		leaf = leaf_queue[first_leaf];
 		leaves_queued[leaf] = 0;
 		first_leaf++;
@@ -198,12 +167,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 
 		if (!join_tree.nodes[leaf].degree[0]) // Upper leaf.
 		{
-			#ifdef CT_DEBUG
-			if (print_intermediate)
-			{
-				fprintf(debug_output, "Upper leaf %.1f\n", node_labels[leaf]);
-			}
-			#endif
 			node = join_tree.arcs[leaf].to;
 			join_tree.nodes[leaf].degree[1] -= 1;
 			join_tree.nodes[node].degree[0] -= 1;
@@ -224,16 +187,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 			split_tree.nodes[leaf].degree[1] -= 1;
 			if (split_tree.nodes[leaf].degree[0])
 			{
-				#ifdef CT_DEBUG
-				if (print_intermediate)
-				{
-					fprintf(debug_output,
-						"Changing arc from %.1f to %.1f --> %.1f\n",
-						node_labels[other_node],
-						node_labels[split_tree.arcs[other_node].to],
-						node_labels[split_tree.arcs[leaf].to]);
-				}
-				#endif
 				split_tree.arcs[other_node].to = split_tree.arcs[leaf].to;
 				split_tree.nodes[leaf].degree[0] -= 1;
 			}
@@ -244,12 +197,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 		}
 		else // Lower leaf.
 		{
-			#ifdef CT_DEBUG
-			if (print_intermediate)
-			{
-				fprintf(debug_output, "Lower leaf %.1f\n", node_labels[leaf]);
-			}
-			#endif
 			node = split_tree.arcs[leaf].to;
 			split_tree.nodes[leaf].degree[0] -= 1;
 			split_tree.nodes[node].degree[1] -= 1;
@@ -269,16 +216,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 			join_tree.nodes[leaf].degree[0] -= 1;
 			if (join_tree.nodes[leaf].degree[1])
 			{
-				#ifdef CT_DEBUG
-				if (print_intermediate)
-				{
-					fprintf(debug_output,
-						"Changing arc from %.1f to %.1f --> %.1f\n",
-						node_labels[other_node],
-						node_labels[join_tree.arcs[other_node].to],
-						node_labels[join_tree.arcs[leaf].to]);
-				}
-				#endif
 				join_tree.arcs[other_node].to = join_tree.arcs[leaf].to;
 				join_tree.nodes[leaf].degree[1] -= 1;
 			}
@@ -291,32 +228,10 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 		if (((join_tree.nodes[node].degree[0] + split_tree.nodes[node].degree[1]) == 1) &&
 									!leaves_queued[node])
 		{
-			#ifdef CT_DEBUG
-			if (print_intermediate)
-			{
-				fprintf(debug_output, "Adding node %.1f to leaf queue.\n",
-								node_labels[node]);
-			}
-			#endif
 			leaf_queue[first_leaf + num_leaves] = node;
 			leaves_queued[node] = 1;
 			num_leaves++;
 		}
-
-		#ifdef CT_DEBUG
-		if (print_intermediate_full)
-		{
-			fprintf(debug_output, "\n***************************\n");
-			fprintf(debug_output, "* Intermediate Join Tree: *\n");
-			fprintf(debug_output, "***************************\n\n");
-			ct_merge_trees_print_test_case(debug_output, &join_tree);
-
-			fprintf(debug_output, "\n****************************\n");
-			fprintf(debug_output, "* Intermediate Split Tree: *\n");
-			fprintf(debug_output, "****************************\n\n");
-			ct_merge_trees_print_test_case(debug_output, &split_tree);
-		}
-		#endif
 	}
 
 	// Sort arcs by "from" node:
@@ -324,26 +239,10 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 							ct_tree_arc_from_qsort_compare);
 
 	#ifdef CT_DEBUG
-	fprintf(debug_output, "\n\n*****************\n");
-	fprintf(debug_output, "* Contour Tree: *\n");
-	fprintf(debug_output, "*****************\n\n");
-	ct_merge_trees_print_test_case(debug_output, contour_tree);
-
-	fprintf(debug_output, "\n\nNum arcs: %u, num nodes: %u\n",
-		contour_tree->num_arcs, contour_tree->num_nodes);
-	fprintf(debug_output, "Duplicates?\n");
-	for (uint32_t i = 1; i < contour_tree->num_arcs; i++)
-	{
-		if ((contour_tree->arcs[i].from == contour_tree->arcs[i - 1].from) &&
-			(contour_tree->arcs[i].to == contour_tree->arcs[i - 1].to))
-		{
-			fprintf(debug_output, "Duplicate arc %u: %u to %u.\n", i,
-				contour_tree->arcs[i].from, contour_tree->arcs[i].to);
-		}
-	}
-	fprintf(debug_output, "\n");
-
-	if (debug_output != stdout) { fclose(debug_output); }
+	fprintf(stdout, "\n\n*****************\n");
+	fprintf(stdout, "* Contour Tree: *\n");
+	fprintf(stdout, "*****************\n\n");
+	ct_tree_print(stdout, contour_tree);
 	#endif
 
 	// Cleanup, success:
@@ -771,14 +670,25 @@ void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *
 
 void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set)
 {
-	fprintf(file, "Number of elements: %u\n", disjoint_set->num_elements);
+	uint32_t unique_elements = 0;
 	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
 	{
-		// Flatten structure and only print root elements:
-		ct_disjoint_set_find(i, disjoint_set);
+		if (disjoint_set->parent[i] == i) { unique_elements++; }
+	}
+
+	fprintf(file, "Number of elements: %u\n", disjoint_set->num_elements);
+	fprintf(file, "Number of unique elements: %u\n", unique_elements);
+
+	unique_elements = 0;
+	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	{
 		if (disjoint_set->parent[i] != i) { continue; }
+		unique_elements++;
 		fprintf(file, "Vertex: %u\t-->\tParent: %u,\tRank: %u,\tLowest: %u\n", i,
 			disjoint_set->parent[i], disjoint_set->rank[i], disjoint_set->lowest[i]);
+
+		// Only print up to 25 unique elements:
+		if (unique_elements == 25) { break; }
 	}
 }
 #endif
