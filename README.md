@@ -10,7 +10,8 @@ For debug, define CT_DEBUG when compiling.
 
 ## Compilation:
 
-Use the provided Makefile (make debug for debug build). Written for Linux.
+Use the provided Makefile (make debug for debug build). Written for Linux.  
+To compile without cloning git repos, use make (debug) DEPS_CLONE="".
 
 ## Usage:
 

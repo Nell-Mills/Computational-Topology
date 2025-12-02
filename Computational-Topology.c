@@ -29,13 +29,6 @@ int main(int argc, char **argv)
 	total_time -= (double)(timer_start.tv_sec) + ((double)(timer_start.tv_nsec) / 1000000000.f);
 	fprintf(stdout, "\nTime taken (mesh load):\t\t\t\t\t%f\t(s)\n", total_time);
 
-	if (!mesh.is_manifold)
-	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Mesh \"%s\" is not manifold. Exiting.\n", mesh.name);
-		goto error;
-	}
-
 	// Scalar value setup:
 	vertex_values = malloc(mesh.num_vertices * sizeof(ct_vertex_value_t));
 	if (!vertex_values) { goto error; }
@@ -52,6 +45,13 @@ int main(int argc, char **argv)
 	total_time -= (double)(timer_start.tv_sec) + ((double)(timer_start.tv_nsec) / 1000000000.f);
 	fprintf(stdout, "Time taken (vertex sorting):\t\t\t\t%f\t(s)\n", total_time);
 
+	#ifdef MP_DEBUG
+	fprintf(stdout, "\n");
+	ct_vertex_values_print(stdout, mesh.num_vertices, vertex_values);
+	fprintf(stdout, "\n\n");
+	mp_mesh_print_short(stdout, &mesh);
+	#endif
+
 	// Contour tree computation:
 	clock_gettime(CLOCK_MONOTONIC, &timer_start);
 	if (ct_contour_tree_construct(&contour_tree, &mesh, vertex_values, error_message))
@@ -62,15 +62,6 @@ int main(int argc, char **argv)
 	total_time = (double)(timer_end.tv_sec) + ((double)(timer_end.tv_nsec) / 1000000000.f);
 	total_time -= (double)(timer_start.tv_sec) + ((double)(timer_start.tv_nsec) / 1000000000.f);
 	fprintf(stdout, "Time taken (contour tree):\t\t\t\t%f\t(s)\n", total_time);
-
-	#ifdef MP_DEBUG
-	fprintf(stdout, "\n");
-	ct_vertex_values_print(stdout, mesh.num_vertices, vertex_values);
-	fprintf(stdout, "\n\n");
-	mp_mesh_print_short(stdout, &mesh);
-	fprintf(stdout, "\n\n");
-	ct_tree_print(stdout, &contour_tree);
-	#endif
 
 	// Cleanup, success:
 	free(vertex_values);

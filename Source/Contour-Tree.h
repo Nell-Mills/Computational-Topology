@@ -74,7 +74,8 @@ void ct_disjoint_set_union(uint32_t v1, uint32_t v2, ct_disjoint_set_t *disjoint
 uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set);
 
 #ifdef CT_DEBUG
-// Debug:
+void ct_merge_trees_build_test_case(ct_tree_t *join_tree, ct_tree_t *split_tree);
+void ct_merge_trees_print_test_case(FILE *file, ct_tree_t *tree);
 void ct_tree_print(FILE *file, ct_tree_t *tree);
 void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *vertex_values);
 void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set);
