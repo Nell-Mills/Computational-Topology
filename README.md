@@ -1,12 +1,13 @@
 # Computational Topology
 
-Implementation of contour tree computation using the "sweep and merge" algorithm.  
+Implementation of contour tree computation using the "sweep and merge" algorithm, described in the paper [Computing contour trees in all dimensions](https://cdr.lib.unc.edu/concern/articles/sj139b05d).
 For debug, define CT_DEBUG when compiling.
 
 ## Functionality implemented:
 
-- Vertex ordering by scalar value.
-- Union find on disjoint set data structure.
+- Vertex ordering by scalar value (simulation of simplicity by index).
+- Union find with union by rank and path compression.
+- Join, split and contour tree computation using sweep and merge algorithm on triangular meshes.
 
 ## Compilation:
 
@@ -15,7 +16,8 @@ To compile without cloning git repos, use make (debug) DEPS_CLONE="".
 
 ## Usage:
 
-Run with 1 argument: file path. Only works with .obj meshes at the moment.
+Run with 1 argument: file path. Only works with .obj meshes at the moment.  
+Program will exit if the manifold check fails.
 
 ### Credits:
 

@@ -60,6 +60,8 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_tree_t split_tree = {0};
 	ct_disjoint_set_t disjoint_set = {0};
 	uint32_t *leaf_queue = NULL;
+	uint32_t *arc_to_join = NULL;
+	uint32_t *arc_to_split = NULL;
 
 	// Indexing into disjoint set via original vertex index, NOT sorted index.
 	disjoint_set.num_elements = mesh->num_vertices;
@@ -90,16 +92,8 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	#endif
 
 	/* There is exactly one arc leading down/up from each node in the join/split tree except
-	 * at minima/maxima. Augment the arc arrays with one extra arc leading from each of these
-	 * nodes. Don't change degree. Now you can index into the arc array (sorted by node "from")
-	 * via the node index. */
-
-	if ((join_tree.num_arcs >= join_tree.num_nodes) ||
-		(split_tree.num_arcs >= split_tree.num_nodes))
-	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Merge tree has too many arcs.");
-		goto error;
-	}
+	 * at minima/maxima. Augment the arc arrays with one extra arc at these nodes. Now you can
+	 * index into the arc array (sorted by node "from") via the node index. */
 
 	for (uint32_t i = 0; i < join_tree.num_nodes; i++)
 	{
@@ -123,6 +117,23 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	qsort(split_tree.arcs, split_tree.num_arcs, sizeof(split_tree.arcs[0]),
 					ct_tree_arc_from_qsort_compare);
 
+	// Also track arc "to" each node. Gets updated when repairing arc connections.
+	arc_to_join = malloc(join_tree.num_nodes * sizeof(uint32_t));
+	arc_to_split = malloc(split_tree.num_nodes * sizeof(uint32_t));
+	if (!arc_to_join || !arc_to_split)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for arc tracking.");
+		goto error;
+	}
+	memset(arc_to_join, 0, join_tree.num_nodes * sizeof(uint32_t));
+	memset(arc_to_split, 0, split_tree.num_nodes * sizeof(uint32_t));
+	for (uint32_t i = 0; i < join_tree.num_arcs; i++)
+	{
+		arc_to_join[join_tree.arcs[i].to] = i;
+		arc_to_split[split_tree.arcs[i].to] = i;
+	}
+
 	// Create leaf queue:
 	uint32_t num_leaves = 0;
 	uint32_t first_leaf = 0;
@@ -136,9 +147,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	for (uint32_t i = 0; i < join_tree.num_nodes; i++)
 	{
 		contour_tree->nodes[i].vertex = join_tree.nodes[i].vertex;
-		if (((join_tree.nodes[i].degree[0] + split_tree.nodes[i].degree[1]) == 1) ||
-			(!join_tree.nodes[i].degree[0] && !split_tree.nodes[i].degree[0]) ||
-			(!join_tree.nodes[i].degree[1] && !split_tree.nodes[i].degree[1]))
+		if ((join_tree.nodes[i].degree[0] + split_tree.nodes[i].degree[1]) == 1)
 		{
 			leaf_queue[num_leaves] = i;
 			num_leaves++;
@@ -164,7 +173,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 		if (!join_tree.nodes[leaf].degree[0]) // Upper leaf.
 		{
 			node = join_tree.arcs[leaf].to;
-			join_tree.nodes[leaf].degree[1] -= 1;
+			other_node = split_tree.arcs[arc_to_split[leaf]].from;
 			join_tree.nodes[node].degree[0] -= 1;
 
 			// Swap "from" and "to" so contour tree arcs point from low to high.
@@ -174,27 +183,25 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 			contour_tree->nodes[leaf].degree[1] += 1;
 			contour_tree->nodes[node].degree[0] += 1;
 
-			other_node = leaf - 1;
-			while ((split_tree.arcs[other_node].to != leaf) ||
-				(!split_tree.nodes[other_node].degree[0]))
-			{
-				other_node--;
-			}
-			split_tree.nodes[leaf].degree[1] -= 1;
 			if (split_tree.nodes[leaf].degree[0])
 			{
 				split_tree.arcs[other_node].to = split_tree.arcs[leaf].to;
-				split_tree.nodes[leaf].degree[0] -= 1;
+				arc_to_split[split_tree.arcs[leaf].to] = other_node;
 			}
-			else if (other_node != leaf)
+			else if (split_tree.nodes[other_node].degree[0])
 			{
 				split_tree.nodes[other_node].degree[0] -= 1;
 			}
+
+			join_tree.nodes[leaf].degree[0] = 0;
+			join_tree.nodes[leaf].degree[1] = 0;
+			split_tree.nodes[leaf].degree[0] = 0;
+			split_tree.nodes[leaf].degree[1] = 0;
 		}
 		else // Lower leaf.
 		{
 			node = split_tree.arcs[leaf].to;
-			split_tree.nodes[leaf].degree[0] -= 1;
+			other_node = join_tree.arcs[arc_to_join[leaf]].from;
 			split_tree.nodes[node].degree[1] -= 1;
 
 			contour_tree->arcs[contour_tree->num_arcs].from = leaf;
@@ -203,22 +210,20 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 			contour_tree->nodes[leaf].degree[0] += 1;
 			contour_tree->nodes[node].degree[1] += 1;
 
-			other_node = leaf + 1;
-			while ((join_tree.arcs[other_node].to != leaf) ||
-				(!join_tree.nodes[other_node].degree[1]))
-			{
-				other_node++;
-			}
-			join_tree.nodes[leaf].degree[0] -= 1;
 			if (join_tree.nodes[leaf].degree[1])
 			{
 				join_tree.arcs[other_node].to = join_tree.arcs[leaf].to;
-				join_tree.nodes[leaf].degree[1] -= 1;
+				arc_to_join[join_tree.arcs[leaf].to] = other_node;
 			}
-			else if (other_node != leaf)
+			else if (join_tree.nodes[other_node].degree[1])
 			{
 				join_tree.nodes[other_node].degree[1] -= 1;
 			}
+
+			split_tree.nodes[leaf].degree[0] = 0;
+			split_tree.nodes[leaf].degree[1] = 0;
+			join_tree.nodes[leaf].degree[0] = 0;
+			join_tree.nodes[leaf].degree[1] = 0;
 		}
 
 		if ((join_tree.nodes[node].degree[0] + split_tree.nodes[node].degree[1]) == 1)
@@ -256,6 +261,8 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_tree_free(&split_tree);
 	ct_disjoint_set_free(&disjoint_set);
 	free(leaf_queue);
+	free(arc_to_join);
+	free(arc_to_split);
 	return 0;
 
 	// Cleanup, failure:
@@ -265,6 +272,8 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	ct_tree_free(&split_tree);
 	ct_disjoint_set_free(&disjoint_set);
 	if (leaf_queue) { free(leaf_queue); }
+	if (arc_to_join) { free(arc_to_join); }
+	if (arc_to_split) { free(arc_to_split); }
 	return -1;
 }
 
