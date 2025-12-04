@@ -1,7 +1,8 @@
+#include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #include <NM-Config/Config.h>
-#include <Mesh-Processing/Mesh-Processing.h>
 
 #include "Source/Computational-Topology.h"
 
@@ -9,7 +10,7 @@ int main(int argc, char **argv)
 {
 	char error_message[NM_MAX_ERROR_LENGTH];
 	strcpy(error_message, "");
-	mp_mesh_t mesh = {0};
+	ct_mesh_t mesh = {0};
 	ct_tree_t contour_tree = {0};
 	ct_vertex_value_t *vertex_values = NULL;
 
@@ -23,7 +24,7 @@ int main(int argc, char **argv)
 	strcpy(mesh.name, mesh.path);
 
 	clock_gettime(CLOCK_MONOTONIC, &timer_start);
-	if (mp_mesh_load(&mesh, error_message)) { goto error; }
+	if (ct_mesh_load(&mesh, error_message)) { goto error; }
 	clock_gettime(CLOCK_MONOTONIC, &timer_end);
 	total_time = (double)(timer_end.tv_sec) + ((double)(timer_end.tv_nsec) / 1000000000.f);
 	total_time -= (double)(timer_start.tv_sec) + ((double)(timer_start.tv_nsec) / 1000000000.f);
@@ -45,11 +46,11 @@ int main(int argc, char **argv)
 	total_time -= (double)(timer_start.tv_sec) + ((double)(timer_start.tv_nsec) / 1000000000.f);
 	fprintf(stdout, "Time taken (vertex sorting):\t\t\t\t%f\t(s)\n", total_time);
 
-	#ifdef MP_DEBUG
+	#ifdef CT_DEBUG
 	fprintf(stdout, "\n");
 	ct_vertex_values_print(stdout, mesh.num_vertices, vertex_values);
 	fprintf(stdout, "\n\n");
-	mp_mesh_print_short(stdout, &mesh);
+	ct_mesh_print_short(stdout, &mesh);
 	#endif
 
 	// Contour tree computation:
@@ -66,7 +67,7 @@ int main(int argc, char **argv)
 	// Cleanup, success:
 	free(vertex_values);
 	ct_tree_free(&contour_tree);
-	mp_mesh_free(&mesh);
+	ct_mesh_free(&mesh);
 	return 0;
 
 	// Cleanup, failure:
@@ -74,6 +75,6 @@ int main(int argc, char **argv)
 	printf("Error: %s\n", error_message);
 	if (vertex_values) { free(vertex_values); }
 	ct_tree_free(&contour_tree);
-	mp_mesh_free(&mesh);
+	ct_mesh_free(&mesh);
 	return -1;
 }

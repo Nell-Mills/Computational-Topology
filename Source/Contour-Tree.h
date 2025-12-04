@@ -7,7 +7,8 @@
 #include <string.h>
 
 #include <NM-Config/Config.h>
-#include <Mesh-Processing/Mesh.h>
+
+#include "Mesh.h"
 
 typedef struct
 {
@@ -49,9 +50,9 @@ int ct_tree_allocate(ct_tree_t *tree, char error_message[NM_MAX_ERROR_LENGTH]);
 void ct_tree_free(ct_tree_t *tree);
 int ct_tree_node_is_critical(ct_tree_node_t *node);
 
-int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
+int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	ct_vertex_value_t *vertex_values, char error_message[NM_MAX_ERROR_LENGTH]);
-void ct_merge_tree_construct(ct_tree_t *merge_tree, mp_mesh_t *mesh, uint32_t start_index,
+void ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh, uint32_t start_index,
 		ct_vertex_value_t *vertex_values, ct_disjoint_set_t *disjoint_set);
 
 int ct_index_compare_join(uint32_t left, uint32_t right);

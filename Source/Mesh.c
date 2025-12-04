@@ -1,6 +1,6 @@
 #include "Mesh.h"
 
-int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_allocate(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
 	if ((mesh->num_vertices < 1) || (mesh->num_normals < 1) || (mesh->num_colours < 1) ||
 		(mesh->num_uv_coordinates < 1) || (mesh->num_edges < 1) || (mesh->num_faces[0] < 1))
@@ -11,32 +11,32 @@ int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 		return -1;
 	}
 
-	mp_mesh_free(mesh);
+	ct_mesh_free(mesh);
 	mesh->num_lod_levels = 1;
 
-	mesh->vertices = malloc(mesh->num_vertices * sizeof(mp_position_t));
-	mesh->normals = malloc(mesh->num_normals * sizeof(mp_normal_t));
-	mesh->colours = malloc(mesh->num_colours * sizeof(mp_colour_t));
-	mesh->uv_coordinates = malloc(mesh->num_uv_coordinates * sizeof(mp_uv_t));
-	mesh->edges = malloc(mesh->num_edges * sizeof(mp_edge_t));
+	mesh->vertices = malloc(mesh->num_vertices * sizeof(ct_position_t));
+	mesh->normals = malloc(mesh->num_normals * sizeof(ct_normal_t));
+	mesh->colours = malloc(mesh->num_colours * sizeof(ct_colour_t));
+	mesh->uv_coordinates = malloc(mesh->num_uv_coordinates * sizeof(ct_uv_t));
+	mesh->edges = malloc(mesh->num_edges * sizeof(ct_edge_t));
 	mesh->first_edge = malloc(mesh->num_vertices * sizeof(uint32_t));
-	mesh->faces[0] = malloc(mesh->num_faces[0] * sizeof(mp_face_t));
+	mesh->faces[0] = malloc(mesh->num_faces[0] * sizeof(ct_face_t));
 	if (!mesh->vertices || !mesh->normals || !mesh->colours ||
 			!mesh->uv_coordinates || !mesh->faces[0])
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for mesh \"%s\".", mesh->name);
-		mp_mesh_free(mesh);
+		ct_mesh_free(mesh);
 		return -1;
 	}
 
-	memset(mesh->vertices, 0, mesh->num_vertices * sizeof(mp_position_t));
-	memset(mesh->normals, 0, mesh->num_normals * sizeof(mp_normal_t));
-	memset(mesh->colours, 0, mesh->num_colours * sizeof(mp_colour_t));
-	memset(mesh->uv_coordinates, 0, mesh->num_uv_coordinates * sizeof(mp_uv_t));
-	memset(mesh->edges, 0, mesh->num_edges * sizeof(mp_edge_t));
+	memset(mesh->vertices, 0, mesh->num_vertices * sizeof(ct_position_t));
+	memset(mesh->normals, 0, mesh->num_normals * sizeof(ct_normal_t));
+	memset(mesh->colours, 0, mesh->num_colours * sizeof(ct_colour_t));
+	memset(mesh->uv_coordinates, 0, mesh->num_uv_coordinates * sizeof(ct_uv_t));
+	memset(mesh->edges, 0, mesh->num_edges * sizeof(ct_edge_t));
 	memset(mesh->first_edge, 0, mesh->num_vertices * sizeof(uint32_t));
-	memset(mesh->faces[0], 0, mesh->num_faces[0] * sizeof(mp_face_t));
+	memset(mesh->faces[0], 0, mesh->num_faces[0] * sizeof(ct_face_t));
 
 	// Temporarily assign additional LOD levels to pointer for first:
 	for (int i = 1; i < NM_MAX_LOD_LEVELS; i++) { mesh->faces[i] = mesh->faces[0]; }
@@ -44,7 +44,7 @@ int mp_mesh_allocate(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	return 0;
 }
 
-void mp_mesh_free(mp_mesh_t *mesh)
+void ct_mesh_free(ct_mesh_t *mesh)
 {
 	if (mesh->vertices)
 	{
@@ -92,7 +92,7 @@ void mp_mesh_free(mp_mesh_t *mesh)
 	}
 }
 
-int mp_mesh_check_validity(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_check_validity(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
 	if (mesh->num_vertices < 3)
 	{
@@ -185,9 +185,9 @@ int mp_mesh_check_validity(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	return 0;
 }
 
-int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	if (mp_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
 
 	for (uint32_t i = 0; i < mesh->num_faces[0]; i++)
 	{
@@ -203,15 +203,15 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 	}
 
 	// Sort edges by lower vertex index, then higher:
-	mp_edge_t *edges = malloc(mesh->num_edges * sizeof(mp_edge_t));
+	ct_edge_t *edges = malloc(mesh->num_edges * sizeof(ct_edge_t));
 	if (!edges)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for edge sorting on mesh \"%s\".", mesh->name);
 		return -1;
 	}
-	memcpy(edges, mesh->edges, mesh->num_edges * sizeof(mp_edge_t));
-	qsort(edges, mesh->num_edges, sizeof(edges[0]), mp_mesh_edge_qsort_compare_low_high);
+	memcpy(edges, mesh->edges, mesh->num_edges * sizeof(ct_edge_t));
+	qsort(edges, mesh->num_edges, sizeof(edges[0]), ct_mesh_edge_qsort_compare_low_high);
 
 	// Other halves should now be adjacent:
 	for (uint32_t i = 0; i < (mesh->num_edges - 1); i++)
@@ -220,8 +220,8 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 			(edges[i].to == edges[i + 1].from))
 		{
 			// Edges were sorted by face, so get original vertex from "next":
-			uint32_t index_left = mp_mesh_get_edge_index(&(edges[i]));
-			uint32_t index_right = mp_mesh_get_edge_index(&(edges[i + 1]));
+			uint32_t index_left = ct_mesh_get_edge_index(&(edges[i]));
+			uint32_t index_right = ct_mesh_get_edge_index(&(edges[i + 1]));
 			mesh->edges[index_left].other_half = index_right;
 			mesh->edges[index_right].other_half = index_left;
 		}
@@ -231,26 +231,26 @@ int mp_mesh_calculate_edges(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 	return 0;
 }
 
-int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_check_manifold(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	if (mp_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
 
 	uint8_t is_manifold = 1;
-	mp_edge_t *edges = malloc(mesh->num_edges * sizeof(mp_edge_t));
+	ct_edge_t *edges = malloc(mesh->num_edges * sizeof(ct_edge_t));
 	if (!edges)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for edge sorting on mesh \"%s\".", mesh->name);
 		return -1;
 	}
-	memcpy(edges, mesh->edges, mesh->num_edges * sizeof(mp_edge_t));
+	memcpy(edges, mesh->edges, mesh->num_edges * sizeof(ct_edge_t));
 
 	/***********************
 	 * Edge duplicate test *
 	 ***********************/
 
 	// Sort edges by lower vertex index, then higher:
-	qsort(edges, mesh->num_edges, sizeof(edges[0]), mp_mesh_edge_qsort_compare_low_high);
+	qsort(edges, mesh->num_edges, sizeof(edges[0]), ct_mesh_edge_qsort_compare_low_high);
 
 	#pragma omp parallel for shared(is_manifold)
 	for (uint32_t i = 0; i < (mesh->num_edges - 1); i++)
@@ -281,7 +281,7 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	 **********************/
 
 	// Sort edges by "from":
-	qsort(edges, mesh->num_edges, sizeof(edges[0]), mp_mesh_edge_qsort_compare_from);
+	qsort(edges, mesh->num_edges, sizeof(edges[0]), ct_mesh_edge_qsort_compare_from);
 
 	uint32_t *vertex_degrees = malloc(mesh->num_vertices * sizeof(uint32_t));
 	if (!vertex_degrees)
@@ -307,7 +307,7 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	for (uint32_t i = 0; i < mesh->num_vertices; i++)
 	{
 		if (!is_manifold) { continue; }
-		if (mp_mesh_triangle_fan_check(mesh, i, vertex_degrees[i])) { is_manifold = 0; }
+		if (ct_mesh_triangle_fan_check(mesh, i, vertex_degrees[i])) { is_manifold = 0; }
 	}
 	mesh->is_manifold = is_manifold;
 
@@ -316,7 +316,7 @@ int mp_mesh_check_manifold(mp_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	return 0;
 }
 
-uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree)
+uint32_t ct_mesh_triangle_fan_check(ct_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree)
 {
 	uint32_t triangles_left = vertex_degree - 1; // Account for first triangle.
 	uint32_t first_edge = mesh->first_edge[vertex];
@@ -324,8 +324,8 @@ uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t v
 
 	while (1)
 	{
-		current_edge = mp_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
-		current_edge = mp_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
+		current_edge = ct_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
+		current_edge = ct_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
 		if ((current_edge == mesh->first_edge[vertex]) || (current_edge == -1)) { break; }
 		if (triangles_left == 0) { return vertex_degree; }
 		triangles_left--;
@@ -339,9 +339,9 @@ uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t v
 	while (1)
 	{
 		first_edge = current_edge;
-		current_edge = mp_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
+		current_edge = ct_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
 		if (current_edge == -1) { break; }
-		current_edge = mp_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
+		current_edge = ct_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
 		if (triangles_left == 0) { return vertex_degree; }
 		triangles_left--;
 	}
@@ -352,13 +352,13 @@ uint32_t mp_mesh_triangle_fan_check(mp_mesh_t *mesh, uint32_t vertex, uint32_t v
 	return triangles_left;
 }
 
-uint32_t mp_mesh_get_edge_index(mp_edge_t *edge)
+uint32_t ct_mesh_get_edge_index(ct_edge_t *edge)
 {
 	if ((edge->next % 3) == 0) { return (edge->next + 2); }
 	else { return (edge->next - 1); }
 }
 
-int64_t mp_mesh_get_next_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t edge)
+int64_t ct_mesh_get_next_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge)
 {
 	int64_t next_edge = edge;
 	if (mesh->edges[next_edge].from == vertex)
@@ -377,7 +377,7 @@ int64_t mp_mesh_get_next_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t 
 	return next_edge;
 }
 
-int64_t mp_mesh_get_previous_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint32_t edge)
+int64_t ct_mesh_get_previous_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge)
 {
 	int64_t previous_edge = edge;
 	if (mesh->edges[previous_edge].to == vertex)
@@ -396,10 +396,10 @@ int64_t mp_mesh_get_previous_vertex_edge(mp_mesh_t *mesh, uint32_t vertex, uint3
 	return previous_edge;
 }
 
-int mp_mesh_edge_qsort_compare_from(const void *a, const void *b)
+int ct_mesh_edge_qsort_compare_from(const void *a, const void *b)
 {
-	mp_edge_t left = *(mp_edge_t *)a;
-	mp_edge_t right = *(mp_edge_t *)b;
+	ct_edge_t left = *(ct_edge_t *)a;
+	ct_edge_t right = *(ct_edge_t *)b;
 
 	if (left.from < right.from) { return -1; }
 	if (left.from > right.from) { return 1; }
@@ -407,10 +407,10 @@ int mp_mesh_edge_qsort_compare_from(const void *a, const void *b)
 	return 0;
 }
 
-int mp_mesh_edge_qsort_compare_low_high(const void *a, const void *b)
+int ct_mesh_edge_qsort_compare_low_high(const void *a, const void *b)
 {
-	mp_edge_t left = *(mp_edge_t *)a;
-	mp_edge_t right = *(mp_edge_t *)b;
+	ct_edge_t left = *(ct_edge_t *)a;
+	ct_edge_t right = *(ct_edge_t *)b;
 
 	uint32_t left_lower;
 	uint32_t left_higher;
@@ -446,8 +446,8 @@ int mp_mesh_edge_qsort_compare_low_high(const void *a, const void *b)
 	return 0;
 }
 
-#ifdef MP_DEBUG
-void mp_mesh_print_short(FILE *file, mp_mesh_t *mesh)
+#ifdef CT_DEBUG
+void ct_mesh_print_short(FILE *file, ct_mesh_t *mesh)
 {
 	fprintf(file, "*******************\n");
 	fprintf(file, "* Mesh debug info *\n");
@@ -474,9 +474,9 @@ void mp_mesh_print_short(FILE *file, mp_mesh_t *mesh)
 	fprintf(file, "\n");
 }
 
-void mp_mesh_print(FILE *file, mp_mesh_t *mesh)
+void ct_mesh_print(FILE *file, ct_mesh_t *mesh)
 {
-	mp_mesh_print_short(file, mesh);
+	ct_mesh_print_short(file, mesh);
 
 	if ((mesh->num_faces[0] > 0) && mesh->vertices && mesh->faces[0])
 	{

@@ -44,10 +44,10 @@ int ct_tree_node_is_critical(ct_tree_node_t *node)
 		!((node->degree[0] == 0) && (node->degree[1] == 0)));
 }
 
-int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
+int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	ct_vertex_value_t *vertex_values, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	if (mp_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
 	if (!mesh->is_manifold)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
@@ -277,7 +277,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, mp_mesh_t *mesh,
 	return -1;
 }
 
-void ct_merge_tree_construct(ct_tree_t *merge_tree, mp_mesh_t *mesh, uint32_t start_index,
+void ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh, uint32_t start_index,
 			ct_vertex_value_t *vertex_values, ct_disjoint_set_t *disjoint_set)
 {
 	uint32_t i = start_index;
@@ -352,7 +352,7 @@ void ct_merge_tree_construct(ct_tree_t *merge_tree, mp_mesh_t *mesh, uint32_t st
 				disjoint_set->extremum[adjacent_component] = current_vertex;
 			}
 
-			current_edge = mp_mesh_get_next_vertex_edge(mesh, current_vertex,
+			current_edge = ct_mesh_get_next_vertex_edge(mesh, current_vertex,
 									current_edge);
 			if ((current_edge == -1) || (mesh->edges[current_edge].other_half ==
 							mesh->first_edge[current_vertex]))
