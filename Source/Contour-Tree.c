@@ -76,11 +76,16 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 
 	ct_merge_tree_construct(&join_tree, mesh, join_tree.num_nodes - 1, vertex_values,
 									&disjoint_set);
-	ct_disjoint_set_reset(&disjoint_set);
+	for (uint32_t i = 0; i < disjoint_set.num_elements; i++)
+	{
+		disjoint_set.parent[i] = i;
+		disjoint_set.rank[i] = 0;
+		disjoint_set.extremum[i] = i;
+	}
 	ct_merge_tree_construct(&split_tree, mesh, 0, vertex_values, &disjoint_set);
 
 	#ifdef CT_DEBUG
-	fprintf(stdout, "\n\n**************\n");
+/*	fprintf(stdout, "\n\n**************\n");
 	fprintf(stdout, "* Join Tree: *\n");
 	fprintf(stdout, "**************\n\n");
 	ct_tree_print(stdout, &join_tree);
@@ -88,7 +93,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	fprintf(stdout, "\n\n***************\n");
 	fprintf(stdout, "* Split Tree: *\n");
 	fprintf(stdout, "***************\n\n");
-	ct_tree_print(stdout, &split_tree);
+	ct_tree_print(stdout, &split_tree);*/
 	#endif
 
 	/* There is exactly one arc leading down/up from each node in the join/split tree except
@@ -234,7 +239,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	}
 
 	#ifdef CT_DEBUG
-	fprintf(stdout, "\n\n*****************\n");
+/*	fprintf(stdout, "\n\n*****************\n");
 	fprintf(stdout, "* Contour Tree: *\n");
 	fprintf(stdout, "*****************\n\n");
 	ct_tree_print(stdout, contour_tree);
@@ -249,7 +254,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 								contour_tree->arcs[i].to);
 		}
 	}
-	printf("\nDuplicates test finished.\n\n");
+	printf("\nDuplicates test finished.\n\n");*/
 	#endif
 
 	// Cleanup, success:
@@ -359,12 +364,6 @@ void ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh, uint32_t st
 
 		if (!index_increment(&i, index_limit)) { break; }
 	}
-
-	#ifdef CT_DEBUG
-	fprintf(stdout, "\n");
-	ct_disjoint_set_print(stdout, disjoint_set);
-	fprintf(stdout, "\n");
-	#endif
 }
 
 int ct_index_compare_join(uint32_t left, uint32_t right)
@@ -417,6 +416,23 @@ void ct_tree_free_NEW(ct_tree_t_NEW *tree)
 	}
 }
 
+int ct_tree_copy_nodes_NEW(ct_tree_t_NEW *from, ct_tree_t_NEW *to,
+			char error_message[NM_MAX_ERROR_LENGTH])
+{
+	ct_tree_free_NEW(to);
+	to->num_nodes = from->num_nodes;
+	to->nodes = malloc(to->num_nodes * sizeof(ct_tree_node_t_NEW));
+	if (!to->nodes)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for tree nodes.");
+		return -1;
+	}
+	memcpy(to->nodes, from->nodes, to->num_nodes * sizeof(ct_tree_node_t_NEW));
+
+	return 0;
+}
+
 void ct_tree_sort_nodes_NEW(ct_tree_t_NEW *tree)
 {
 	// Sort ascending by scalar value:
@@ -461,7 +477,6 @@ int ct_merge_tree_construct_NEW(ct_tree_t_NEW *merge_tree, ct_mesh_t *mesh,
 	disjoint_set.num_elements = merge_tree->num_nodes;
 	if (ct_disjoint_set_allocate(&disjoint_set, error_message)) { return -1; }
 
-	// Each arc is recorded twice:
 	merge_tree->arcs = malloc(merge_tree->num_nodes * 2 * sizeof(uint32_t));
 	if (!merge_tree->arcs)
 	{
@@ -567,22 +582,143 @@ int ct_merge_tree_construct_NEW(ct_tree_t_NEW *merge_tree, ct_mesh_t *mesh,
 		if (!index_increment(&i, index_limit)) { break; }
 	}
 
-	#ifdef CT_DEBUG
-	fprintf(stdout, "\n");
-	ct_disjoint_set_print(stdout, &disjoint_set);
-	fprintf(stdout, "\n");
-	#endif
+	// Repair up arcs in the split tree. If the up degree is 0, an element was still added:
+	if (direction == 0)
+	{
+		for (uint32_t i = 0; i < merge_tree->num_nodes; i++)
+		{
+			if (!merge_tree->nodes[i].degree[0])
+			{
+				// By definition, there must be exactly 1 down arc - swap them:
+				merge_tree->arcs[merge_tree->nodes[i].first_arc] =
+					merge_tree->arcs[merge_tree->nodes[i].first_arc + 1];
+			}
+		}
+	}
 
-	merge_tree->arcs = realloc(merge_tree->arcs, merge_tree->num_arcs * 2 * sizeof(uint32_t));
-	if (!merge_tree->arcs)
+	// Fill in root information. Allocate more memory than needed for now:
+	merge_tree->roots = malloc(merge_tree->num_nodes * sizeof(uint32_t));
+	if (!merge_tree->roots)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not reallocate memory for tree arcs.");
+			"Could not allocate memory for tree roots.");
+		ct_disjoint_set_free(&disjoint_set);
+		return -1;
+	}
+
+	for (uint32_t j = 0; j < disjoint_set.num_elements; j++)
+	{
+		if (disjoint_set.parent[j] == j)
+		{
+			merge_tree->roots[merge_tree->num_roots] = disjoint_set.extremum[j];
+			merge_tree->num_roots++;
+		}
+	}
+
+	merge_tree->roots = realloc(merge_tree->roots, merge_tree->num_roots * sizeof(uint32_t));
+	if (!merge_tree->roots)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not reallocate memory for tree roots.");
 		ct_disjoint_set_free(&disjoint_set);
 		return -1;
 	}
 
 	ct_disjoint_set_free(&disjoint_set);
+	return 0;
+}
+
+int ct_contour_tree_construct_NEW(ct_tree_t_NEW *contour_tree, ct_tree_t_NEW *join_tree,
+		ct_tree_t_NEW *split_tree, char error_message[NM_MAX_ERROR_LENGTH])
+{
+	/*****************
+	 * Sanity checks *
+	 *****************/
+
+	if (!join_tree->nodes || !join_tree->arcs || !join_tree->roots)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Join tree is incomplete.");
+		return -1;
+	}
+	if (!split_tree->nodes || !split_tree->arcs || !split_tree->roots)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Split tree is incomplete.");
+		return -1;
+	}
+	if (join_tree->num_arcs != (join_tree->num_nodes - join_tree->num_roots))
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Join tree has incorrect number of arcs.");
+		return -1;
+	}
+	if (split_tree->num_arcs != (split_tree->num_nodes - split_tree->num_roots))
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Split tree has incorrect number of arcs.");
+		return -1;
+	}
+	if ((join_tree->num_nodes != split_tree->num_nodes) ||
+		(join_tree->num_arcs != split_tree->num_arcs) ||
+		(join_tree->num_roots != split_tree->num_roots))
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Join and split tree do not match.");
+		return -1;
+	}
+
+	/***************************
+	 * Contour tree node setup *
+	 ***************************/
+
+	contour_tree->num_nodes = join_tree->num_nodes;
+	contour_tree->nodes = malloc(contour_tree->num_nodes * sizeof(ct_tree_node_t_NEW));
+	if (!contour_tree->nodes)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for contour tree nodes.");
+		return -1;
+	}
+	memset(contour_tree->nodes, 0, contour_tree->num_nodes * sizeof(ct_tree_node_t_NEW));
+
+	for (uint32_t i = 0; i < join_tree->num_nodes; i++)
+	{
+		contour_tree->nodes[i].value = join_tree->nodes[i].value;
+		contour_tree->nodes[i].node_to_vertex = join_tree->nodes[i].node_to_vertex;
+		contour_tree->nodes[i].vertex_to_node = join_tree->nodes[i].vertex_to_node;
+
+		// Degree information will be accumulated during merging.
+
+		if (i > 0)
+		{
+			contour_tree->nodes[i].first_arc = contour_tree->nodes[i - 1].first_arc +
+							join_tree->nodes[i - 1].degree[0] +
+							split_tree->nodes[i - 1].degree[1];
+		}
+	}
+
+	/***********************************
+	 * Contour tree arc and root setup *
+	 ***********************************/
+
+	contour_tree->num_arcs = join_tree->num_arcs;
+	contour_tree->arcs = malloc(contour_tree->num_arcs * 2 * sizeof(uint32_t));
+	if (!contour_tree->arcs)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for contour tree arcs.");
+		return -1;
+	}
+	memset(contour_tree->arcs, 0, contour_tree->num_arcs * 2 * sizeof(uint32_t));
+
+	contour_tree->num_roots = join_tree->num_roots;
+	contour_tree->roots = malloc(contour_tree->num_roots * sizeof(uint32_t));
+	if (!contour_tree->roots)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for contour tree roots.");
+		return -1;
+	}
+	memcpy(contour_tree->roots, join_tree->roots, contour_tree->num_roots * sizeof(uint32_t));
+
 	return 0;
 }
 
@@ -593,6 +729,8 @@ int ct_merge_tree_construct_NEW(ct_tree_t_NEW *merge_tree, ct_mesh_t *mesh,
 int ct_tree_scalar_function_y_NEW(ct_tree_t_NEW *tree, ct_mesh_t *mesh,
 			char error_message[NM_MAX_ERROR_LENGTH])
 {
+	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
+
 	// If creating a new set of nodes, discard old tree:
 	ct_tree_free_NEW(tree);
 	tree->num_nodes = mesh->num_vertices;
@@ -702,7 +840,12 @@ int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 		return -1;
 	}
 
-	ct_disjoint_set_reset(disjoint_set);
+	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	{
+		disjoint_set->parent[i] = i;
+		disjoint_set->rank[i] = 0;
+		disjoint_set->extremum[i] = i;
+	}
 
 	return 0;
 }
@@ -725,16 +868,6 @@ void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set)
 	{
 		free(disjoint_set->extremum);
 		disjoint_set->extremum = NULL;
-	}
-}
-
-void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set)
-{
-	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
-	{
-		disjoint_set->parent[i] = i;
-		disjoint_set->rank[i] = 0;
-		disjoint_set->extremum[i] = i;
 	}
 }
 
@@ -889,7 +1022,9 @@ void ct_tree_print(FILE *file, ct_tree_t *tree)
 void ct_tree_print_NEW(FILE *file, ct_tree_t_NEW *tree)
 {
 	fprintf(file, "Note: printing only critical arcs and nodes.\n");
-	fprintf(file, "\n%u Nodes:\n", tree->num_nodes);
+	fprintf(file, "\n%u Node", tree->num_nodes);
+	if (tree->num_nodes != 1) { fprintf(file, "s"); }
+	fprintf(file, ":\n");
 	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
 		if (!ct_tree_node_is_critical_NEW(&(tree->nodes[i]))) { continue; }
@@ -898,7 +1033,9 @@ void ct_tree_print_NEW(FILE *file, ct_tree_t_NEW *tree)
 			tree->nodes[i].degree[1]);
 	}
 
-	fprintf(file, "\n%u Arcs:\n", tree->num_arcs);
+	fprintf(file, "\n%u Arc", tree->num_arcs);
+	if (tree->num_arcs != 1) { fprintf(file, "s"); }
+	fprintf(file, ":\n");
 	uint32_t arcs_printed = 0;
 	uint32_t first_arc = 0;
 	uint32_t num_arcs = 0;
@@ -917,72 +1054,132 @@ void ct_tree_print_NEW(FILE *file, ct_tree_t_NEW *tree)
 			arcs_printed++;
 		}
 	}
+
+	fprintf(file, "\n%u Root", tree->num_roots);
+	if (tree->num_roots != 1) { fprintf(file, "s"); }
+	fprintf(file, ":\n");
+	if (tree->num_roots) { fprintf(file, "%u", tree->roots[0]); }
+	for (uint32_t i = 1; i < tree->num_roots; i++)
+	{
+		fprintf(file, ", %u", tree->roots[i]);
+	}
+	if (tree->num_roots) { fprintf(file, "\n"); }
 }
 
-void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *vertex_values)
+int ct_tree_build_test_case_NEW(ct_tree_t_NEW *join_tree, ct_tree_t_NEW *split_tree,
+						char error_message[NM_MAX_ERROR_LENGTH])
 {
-	if (num_values > 0)
+	float node_labels[18] = { 1.f, 2.f, 2.1f, 3.f, 4.f, 4.6f,
+				4.9f, 5.f, 6.f, 6.1f, 6.5f, 6.9f,
+				7.f, 7.2f, 8.f, 8.3f, 9.f, 10.f };
+
+	join_tree->num_nodes	= split_tree->num_nodes	= 18;
+	join_tree->num_arcs	= split_tree->num_arcs	= 17;
+	join_tree->num_roots	= split_tree->num_roots	= 1;
+
+	join_tree->nodes = malloc(join_tree->num_nodes * sizeof(ct_tree_node_t_NEW));
+	join_tree->arcs = malloc(join_tree->num_arcs * 2 * sizeof(uint32_t));
+	join_tree->roots = malloc(join_tree->num_roots * sizeof(uint32_t));
+
+	split_tree->nodes = malloc(split_tree->num_nodes * sizeof(ct_tree_node_t_NEW));
+	split_tree->arcs = malloc(split_tree->num_arcs * 2 * sizeof(uint32_t));
+	split_tree->roots = malloc(split_tree->num_roots * sizeof(uint32_t));
+
+	if (!join_tree->nodes || !join_tree->arcs || !join_tree->roots ||
+		!split_tree->nodes || !split_tree->arcs || !split_tree->roots)
 	{
-		fprintf(file, "Ordered vertices:\n");
-		fprintf(file, "%u:\t%f\t(%u)", vertex_values[0].vertex, vertex_values[0].value,
-								vertex_values[0].vertex_map);
-	}
-	else
-	{
-		fprintf(file, "No ordered vertices to print.\n");
-		return;
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for test case join and split trees.");
+		return -1;
 	}
 
-	// If number of vertices exceeds 20, just print first 10 and last 10:
-	if (num_values > 20)
-	{
-		for (uint32_t i = 1; i < 10; i++)
-		{
-			fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[i].vertex,
-				vertex_values[i].value, vertex_values[i].vertex_map);
-		}
-		fprintf(file, "\n. . . \n");
+	uint32_t up_degrees_join[18] = { 1, 1, 1, 1, 2, 1, 1, 2, 2, 1, 1, 1, 0, 1, 0, 1, 0, 0 };
+	uint32_t down_degrees_join[18] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+	uint32_t up_degrees_split[18] = { 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0 };
+	uint32_t down_degrees_split[18] = { 0, 0, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
 
-		fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[num_values - 10].vertex,
-					vertex_values[num_values - 10].value,
-					vertex_values[num_values - 10].vertex_map);
-		for (uint32_t i = num_values - 9; i < num_values; i++)
-		{
-			fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[i].vertex,
-				vertex_values[i].value, vertex_values[i].vertex_map);
-		}
-	}
-	else
+	uint32_t first_arcs_join[18] = { 0, 1, 3, 5, 7, 10, 12, 14, 17, 20,
+					22, 24, 26, 27, 29, 30, 32, 33 };
+	uint32_t first_arcs_split[18] = { 0, 1, 2, 4, 7, 9, 11, 13, 15, 17,
+					19, 21, 23, 25, 27, 29, 31, 33 };
+
+	for (uint32_t i = 0; i < join_tree->num_nodes; i++)
 	{
-		for (uint32_t i = 1; i < num_values; i++)
-		{
-			fprintf(file, "\n%u:\t%f\t(%u)", vertex_values[i].vertex,
-				vertex_values[i].value, vertex_values[i].vertex_map);
-		}
+		join_tree->nodes[i].value = split_tree->nodes[i].value = node_labels[i];
+		join_tree->nodes[i].node_to_vertex = split_tree->nodes[i].node_to_vertex = i;
+		join_tree->nodes[i].vertex_to_node = split_tree->nodes[i].vertex_to_node = i;
+
+		join_tree->nodes[i].degree[0] = up_degrees_join[i];
+		join_tree->nodes[i].degree[1] = down_degrees_join[i];
+		split_tree->nodes[i].degree[0] = up_degrees_split[i];
+		split_tree->nodes[i].degree[1] = down_degrees_split[i];
+
+		join_tree->nodes[i].first_arc = first_arcs_join[i];
+		split_tree->nodes[i].first_arc = first_arcs_split[i];
 	}
+
+	uint32_t arcs_join[34] = { 1, 2, 0, 3, 1, 4, 2, 5, 6, 3, 7,
+				4, 8, 4, 9, 10, 5, 11, 12, 6, 13, 7,
+				16, 7, 14, 8, 8, 15, 9, 11, 17, 13, 10, 15 };
+
+	uint32_t arcs_split[34] = { 2, 3, 3, 0, 4, 1, 2, 5, 3, 6, 4, 7,
+				5, 8, 6, 9, 7, 10, 8, 11, 9, 12, 10, 13,
+				11, 14, 12, 15, 13, 16, 14, 17, 15, 16 };
+
+	memcpy(join_tree->arcs, arcs_join, 34 * sizeof(uint32_t));
+	memcpy(split_tree->arcs, arcs_split, 34 * sizeof(uint32_t));
+
+	join_tree->roots[0] = 0;
+	split_tree->roots[0] = 17;
+
+	return 0;
 }
 
-void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set)
+void ct_tree_print_test_case_NEW(FILE *file, ct_tree_t_NEW *tree)
 {
-	uint32_t unique_elements = 0;
-	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	float node_labels[18] = { 1.f, 2.f, 2.1f, 3.f, 4.f, 4.6f, 4.9f, 5.f,
+		6.f, 6.1f, 6.5f, 6.9f, 7.f, 7.2f, 8.f, 8.3f, 9.f, 10.f };
+
+	fprintf(file, "\n%u Node", tree->num_nodes);
+	if (tree->num_nodes != 1) { fprintf(file, "s"); }
+	fprintf(file, ":\n");
+	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
-		if (disjoint_set->parent[i] == i) { unique_elements++; }
+		fprintf(file, "Node %.1f -> Up = %u, Down = %u", node_labels[i],
+			tree->nodes[i].degree[0], tree->nodes[i].degree[1]);
+		if (!tree->nodes[i].degree[0] && !tree->nodes[i].degree[1])
+		{
+			fprintf(file, "\t(deleted)");
+		}
+		fprintf(file, "\n");
 	}
 
-	fprintf(file, "Number of elements: %u\n", disjoint_set->num_elements);
-	fprintf(file, "Number of unique elements: %u\n", unique_elements);
-
-	unique_elements = 0;
-	for (uint32_t i = 0; i < disjoint_set->num_elements; i++)
+	fprintf(file, "\n%u Arc", tree->num_arcs);
+	if (tree->num_arcs != 1) { fprintf(file, "s"); }
+	fprintf(file, ":\n");
+	uint32_t arcs_printed = 0;
+	uint32_t first_arc = 0;
+	uint32_t num_arcs = 0;
+	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
-		if (disjoint_set->parent[i] != i) { continue; }
-		unique_elements++;
-		fprintf(file, "Vertex: %u\t-->\tParent: %u,\tRank: %u,\tExtremum: %u\n", i,
-			disjoint_set->parent[i], disjoint_set->rank[i], disjoint_set->extremum[i]);
-
-		// Only print up to 25 unique elements:
-		if (unique_elements == 25) { break; }
+		first_arc = tree->nodes[i].first_arc;
+		num_arcs = tree->nodes[i].degree[0];
+		for (uint32_t j = first_arc; j < (first_arc + num_arcs); j++)
+		{
+			fprintf(file, "Arc %u: %.1f --> %.1f\n", arcs_printed,
+				node_labels[i], node_labels[tree->arcs[j]]);
+			arcs_printed++;
+		}
 	}
+
+	fprintf(file, "\n%u Root", tree->num_roots);
+	if (tree->num_roots != 1) { fprintf(file, "s"); }
+	fprintf(file, ":\n");
+	if (tree->num_roots) { fprintf(file, "%.1f", node_labels[tree->roots[0]]); }
+	for (uint32_t i = 1; i < tree->num_roots; i++)
+	{
+		fprintf(file, ", %.1f", node_labels[tree->roots[i]]);
+	}
+	if (tree->num_roots) { fprintf(file, "\n"); }
 }
 #endif

@@ -296,7 +296,7 @@ int ct_mesh_check_manifold(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	uint32_t current_edge = 0;
 	for (uint32_t i = 0; i < mesh->num_vertices; i++)
 	{
-		while (edges[current_edge].from == i)
+		while ((current_edge < mesh->num_edges) && (edges[current_edge].from == i))
 		{
 			vertex_degrees[i]++;
 			current_edge++;

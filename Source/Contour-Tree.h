@@ -79,11 +79,13 @@ typedef struct
 	uint32_t *arcs; // Allocated during tree construction.
 
 	uint32_t num_roots; // One tree per disconnected component in the mesh.
-	uint32_t *roots; // Lowest-valued node in each tree. Allocated during tree construction.
+	uint32_t *roots; // Allocated during tree construction. Low in join tree, high in split.
 } ct_tree_t_NEW;
 
 // Tree management:
 void ct_tree_free_NEW(ct_tree_t_NEW *tree);
+int ct_tree_copy_nodes_NEW(ct_tree_t_NEW *from, ct_tree_t_NEW *to,
+			char error_message[NM_MAX_ERROR_LENGTH]);
 void ct_tree_sort_nodes_NEW(ct_tree_t_NEW *tree);
 int ct_tree_nodes_qsort_compare_NEW(const void *a, const void *b);
 int ct_tree_node_is_critical_NEW(ct_tree_node_t_NEW *node);
@@ -91,6 +93,8 @@ int ct_tree_node_is_critical_NEW(ct_tree_node_t_NEW *node);
 // Tree construction:
 int ct_merge_tree_construct_NEW(ct_tree_t_NEW *merge_tree, ct_mesh_t *mesh,
 	uint32_t start_index, char error_message[NM_MAX_ERROR_LENGTH]);
+int ct_contour_tree_construct_NEW(ct_tree_t_NEW *contour_tree, ct_tree_t_NEW *join_tree,
+		ct_tree_t_NEW *split_tree, char error_message[NM_MAX_ERROR_LENGTH]);
 
 // Vertex scalar functions:
 int ct_tree_scalar_function_y_NEW(ct_tree_t_NEW *tree, ct_mesh_t *mesh,
@@ -109,7 +113,6 @@ void ct_vertex_values_sort(uint32_t num_values, ct_vertex_value_t *vertex_values
 int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
 		char error_message[NM_MAX_ERROR_LENGTH]);
 void ct_disjoint_set_free(ct_disjoint_set_t *disjoint_set);
-void ct_disjoint_set_reset(ct_disjoint_set_t *disjoint_set);
 void ct_disjoint_set_union(uint32_t v1, uint32_t v2, ct_disjoint_set_t *disjoint_set);
 uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set);
 
@@ -117,9 +120,11 @@ uint32_t ct_disjoint_set_find(uint32_t v, ct_disjoint_set_t *disjoint_set);
 void ct_merge_trees_build_test_case(ct_tree_t *join_tree, ct_tree_t *split_tree);
 void ct_merge_trees_print_test_case(FILE *file, ct_tree_t *tree);
 void ct_tree_print(FILE *file, ct_tree_t *tree);
+
 void ct_tree_print_NEW(FILE *file, ct_tree_t_NEW *tree);
-void ct_vertex_values_print(FILE *file, uint32_t num_values, ct_vertex_value_t *vertex_values);
-void ct_disjoint_set_print(FILE *file, ct_disjoint_set_t *disjoint_set);
+int ct_tree_build_test_case_NEW(ct_tree_t_NEW *join_tree, ct_tree_t_NEW *split_tree,
+						char error_message[NM_MAX_ERROR_LENGTH]);
+void ct_tree_print_test_case_NEW(FILE *file, ct_tree_t_NEW *tree);
 #endif
 
 #endif
