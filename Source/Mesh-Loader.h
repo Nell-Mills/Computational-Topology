@@ -7,7 +7,7 @@
 
 #include <NM-Config/Config.h>
 #include <TinyOBJLoaderC/tinyobj_loader_c.h>
-#include <SDL2/SDL_rwops.h>
+#include <SDL3/SDL_iostream.h>
 
 #include "Mesh.h"
 

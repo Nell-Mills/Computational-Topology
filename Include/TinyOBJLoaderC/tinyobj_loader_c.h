@@ -26,7 +26,7 @@
 
 /* @todo { Remove stddef dependency. size_t? } */
 #include <stddef.h>
-#include <SDL2/SDL_rwops.h>
+#include <SDL3/SDL_iostream.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -196,7 +196,7 @@ int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 			mesh->edges[(i * 3) + j].from		= mesh->faces[0][i].p[j];
 			mesh->edges[(i * 3) + j].to		= mesh->faces[0][i].p[(j + 1) % 3];
 			mesh->edges[(i * 3) + j].next		= (i * 3) + ((j + 1) % 3);
-			mesh->edges[(i * 3) + j].other_half	= -1;
+			mesh->edges[(i * 3) + j].other_half	= UINT32_MAX;
 
 			mesh->first_edge[mesh->edges[(i * 3) + j].from] = (i * 3) + j;
 		}
@@ -307,6 +307,12 @@ int ct_mesh_check_manifold(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	for (uint32_t i = 0; i < mesh->num_vertices; i++)
 	{
 		if (!is_manifold) { continue; }
+		if (vertex_degrees[i] == 0)
+		{
+			// TODO - add a function to remove these vertices from the mesh.
+			is_manifold = 0;
+			continue;
+		}
 		if (ct_mesh_triangle_fan_check(mesh, i, vertex_degrees[i])) { is_manifold = 0; }
 	}
 	mesh->is_manifold = is_manifold;
@@ -320,19 +326,22 @@ uint32_t ct_mesh_triangle_fan_check(ct_mesh_t *mesh, uint32_t vertex, uint32_t v
 {
 	uint32_t triangles_left = vertex_degree - 1; // Account for first triangle.
 	uint32_t first_edge = mesh->first_edge[vertex];
-	int64_t current_edge = mesh->first_edge[vertex];
+	uint32_t current_edge = mesh->first_edge[vertex];
 
 	while (1)
 	{
 		current_edge = ct_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
 		current_edge = ct_mesh_get_next_vertex_edge(mesh, vertex, current_edge);
-		if ((current_edge == mesh->first_edge[vertex]) || (current_edge == -1)) { break; }
+		if ((current_edge == mesh->first_edge[vertex]) || (current_edge == UINT32_MAX))
+		{
+			break;
+		}
 		if (triangles_left == 0) { return vertex_degree; }
 		triangles_left--;
 	}
 
 	// If full cycle encountered, stop here:
-	if (current_edge != -1) { return triangles_left; }
+	if (current_edge != UINT32_MAX) { return triangles_left; }
 
 	// Walk other way:
 	current_edge = mesh->first_edge[vertex];
@@ -340,14 +349,14 @@ uint32_t ct_mesh_triangle_fan_check(ct_mesh_t *mesh, uint32_t vertex, uint32_t v
 	{
 		first_edge = current_edge;
 		current_edge = ct_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
-		if (current_edge == -1) { break; }
+		if (current_edge == UINT32_MAX) { break; }
 		current_edge = ct_mesh_get_previous_vertex_edge(mesh, vertex, current_edge);
 		if (triangles_left == 0) { return vertex_degree; }
 		triangles_left--;
 	}
 
 	// Change first edge from vertex to actual first edge in fan (if boundary):
-	if (current_edge == -1) { mesh->first_edge[vertex] = first_edge; }
+	if (current_edge == UINT32_MAX) { mesh->first_edge[vertex] = first_edge; }
 
 	return triangles_left;
 }
@@ -358,9 +367,11 @@ uint32_t ct_mesh_get_edge_index(ct_edge_t *edge)
 	else { return (edge->next - 1); }
 }
 
-int64_t ct_mesh_get_next_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge)
+uint32_t ct_mesh_get_next_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge)
 {
-	int64_t next_edge = edge;
+	if (edge == UINT32_MAX) { return edge; }
+
+	uint32_t next_edge = edge;
 	if (mesh->edges[next_edge].from == vertex)
 	{
 		next_edge = mesh->edges[next_edge].next;
@@ -377,9 +388,9 @@ int64_t ct_mesh_get_next_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t 
 	return next_edge;
 }
 
-int64_t ct_mesh_get_previous_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge)
+uint32_t ct_mesh_get_previous_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge)
 {
-	int64_t previous_edge = edge;
+	uint32_t previous_edge = edge;
 	if (mesh->edges[previous_edge].to == vertex)
 	{
 		previous_edge = mesh->edges[previous_edge].next;
@@ -513,10 +524,10 @@ void ct_mesh_print(FILE *file, ct_mesh_t *mesh)
 								mesh->edges[i].to);
 			fprintf(file, "--> Next edge: %u\n", mesh->edges[i].next);
 			fprintf(file, "--> Face: %u\n", (i - (i % 3)) / 3);
-			fprintf(file, "--> Other half: %ld\n", mesh->edges[i].other_half);
-			if (mesh->edges[i].other_half != -1)
+			fprintf(file, "--> Other half: %u\n", mesh->edges[i].other_half);
+			if (mesh->edges[i].other_half != UINT32_MAX)
 			{
-				fprintf(file, "--> Other face: %ld\n", (mesh->edges[i].other_half -
+				fprintf(file, "--> Other face: %u\n", (mesh->edges[i].other_half -
 							(mesh->edges[i].other_half % 3)) / 3);
 			}
 			else

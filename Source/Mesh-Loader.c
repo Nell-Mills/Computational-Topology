@@ -40,6 +40,13 @@ int ct_mesh_load(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 		return -1;
 	}
 
+	if ((mesh->num_edges) == UINT32_MAX) // UINT32_MAX used as error value.
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Mesh \"%s\" is too large.", mesh->name);
+		return -1;
+	}
+
 	if (ct_mesh_calculate_edges(mesh, error_message)) { return -1; }
 	if (ct_mesh_check_manifold(mesh, error_message)) { return -1; }
 
@@ -235,8 +242,22 @@ int ct_mesh_load_voxels(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]
 		return -1;
 	}
 
-	fseek(file, 0, SEEK_END);
-	long data_size = ftell(file);
+	if (fseek(file, 0, SEEK_END))
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not navigate file \"%s\" for mesh \"%s\".", mesh->path, mesh->name);
+		fclose(file);
+		return -1;
+	}
+	size_t data_size = ftell(file);
+	if (data_size == (size_t)(-1))
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not get position in file \"%s\" for mesh \"%s\".",
+			mesh->path, mesh->name);
+		fclose(file);
+		return -1;
+	}
 	rewind(file);
 
 	char *data = malloc(data_size + 1);
@@ -247,7 +268,15 @@ int ct_mesh_load_voxels(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]
 		fclose(file);
 		return -1;
 	}
-	fread(data, data_size, 1, file);
+	if (fread(data, data_size, 1, file) != data_size)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not read data from file \"%s\" for mesh \"%s\".",
+			mesh->path, mesh->name);
+		free(data);
+		fclose(file);
+		return -1;
+	}
 	fclose(file);
 
 	char *position = data;
@@ -292,8 +321,8 @@ int ct_mesh_load_voxels(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]
 			// Prematurely ran out of values:
 			snprintf(error_message, NM_MAX_ERROR_LENGTH,
 				"Not enough voxel values in file for mesh \"%s\".\n", mesh->name);
-			free(data);
 			free(voxels);
+			free(data);
 			return -1;
 		}
 
@@ -324,8 +353,8 @@ int ct_mesh_load_voxels(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]
 		voxels[i] *= negative;
 	}
 
-	free(data);
 	free(voxels);
+	free(data);
 	return 0;
 }
 
