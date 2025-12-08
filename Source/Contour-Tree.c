@@ -469,7 +469,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 			{
 				// Join higher node to lower one:
 				lower_node = join_tree->arcs[join_tree->nodes[leaf].first_arc +
-							split_tree->nodes[leaf].degree[1]];
+							join_tree->nodes[leaf].degree[1]];
 				join_tree->arcs[join_tree->nodes[higher_node].first_arc +
 					join_tree->nodes[higher_node].degree[0]] = lower_node;
 				join_tree->arcs[join_tree->nodes[lower_node].first_arc] =
