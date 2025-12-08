@@ -85,7 +85,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	ct_merge_tree_construct(&split_tree, mesh, 0, vertex_values, &disjoint_set);
 
 	#ifdef CT_DEBUG
-/*	fprintf(stdout, "\n\n**************\n");
+	fprintf(stdout, "\n\n**************\n");
 	fprintf(stdout, "* Join Tree: *\n");
 	fprintf(stdout, "**************\n\n");
 	ct_tree_print(stdout, &join_tree);
@@ -93,7 +93,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	fprintf(stdout, "\n\n***************\n");
 	fprintf(stdout, "* Split Tree: *\n");
 	fprintf(stdout, "***************\n\n");
-	ct_tree_print(stdout, &split_tree);*/
+	ct_tree_print(stdout, &split_tree);
 	#endif
 
 	/* There is exactly one arc leading down/up from each node in the join/split tree except
@@ -239,7 +239,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 	}
 
 	#ifdef CT_DEBUG
-/*	fprintf(stdout, "\n\n*****************\n");
+	fprintf(stdout, "\n\n*****************\n");
 	fprintf(stdout, "* Contour Tree: *\n");
 	fprintf(stdout, "*****************\n\n");
 	ct_tree_print(stdout, contour_tree);
@@ -254,7 +254,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_mesh_t *mesh,
 								contour_tree->arcs[i].to);
 		}
 	}
-	printf("\nDuplicates test finished.\n\n");*/
+	printf("\nDuplicates test finished.\n\n");
 	#endif
 
 	// Cleanup, success:
@@ -719,6 +719,166 @@ int ct_contour_tree_construct_NEW(ct_tree_t_NEW *contour_tree, ct_tree_t_NEW *jo
 	}
 	memcpy(contour_tree->roots, join_tree->roots, contour_tree->num_roots * sizeof(uint32_t));
 
+	/*****************************
+	 * Contour tree construction *
+	 *****************************/
+
+	// Track original up degrees of nodes (needed for down degree indexing):
+	uint32_t *up_degrees = malloc(contour_tree->num_nodes * sizeof(uint32_t));
+	if (!up_degrees)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for up degrees.");
+		return -1;
+	}
+
+	// Create leaf queue:
+	uint32_t num_leaves = 0;
+	uint32_t first_leaf = 0;
+	uint32_t *leaf_queue = malloc(contour_tree->num_nodes * sizeof(uint32_t));
+	if (!leaf_queue)
+	{
+		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for leaf queue.");
+		free(up_degrees);
+		return -1;
+	}
+	for (uint32_t i = 0; i < contour_tree->num_nodes; i++)
+	{
+		up_degrees[i] = join_tree->nodes[i].degree[0];
+		if ((join_tree->nodes[i].degree[0] + split_tree->nodes[i].degree[1]) == 1)
+		{
+			leaf_queue[num_leaves] = i;
+			num_leaves++;
+		}
+	}
+
+	// Merge join and split trees:
+	uint32_t leaf;
+	uint32_t node;
+	uint32_t higher_node;
+	uint32_t lower_node;
+	while (num_leaves > 1)
+	{
+		leaf = leaf_queue[first_leaf];
+		first_leaf++;
+		num_leaves--;
+
+		// Meshes with multiple disconnected components need this:
+		if (!join_tree->nodes[leaf].degree[0] && !split_tree->nodes[leaf].degree[1])
+		{
+			continue;
+		}
+
+		if (!join_tree->nodes[leaf].degree[0]) // Upper leaf.
+		{
+			// Add arc to contour tree:
+			node = join_tree->arcs[join_tree->nodes[leaf].first_arc];
+
+			contour_tree->arcs[contour_tree->nodes[leaf].first_arc +
+				up_degrees[leaf] + contour_tree->nodes[leaf].degree[1]] = node;
+			contour_tree->nodes[leaf].degree[1]++;
+
+			contour_tree->arcs[contour_tree->nodes[node].first_arc +
+				contour_tree->nodes[node].degree[0]] = leaf;
+			contour_tree->nodes[node].degree[0]++;
+
+			// Remove arc from join tree:
+			for (uint32_t i = 0; i < join_tree->nodes[node].degree[0]; i++)
+			{
+				if (join_tree->arcs[join_tree->nodes[node].first_arc + i] == leaf)
+				{
+					join_tree->arcs[join_tree->nodes[node].first_arc + i] =
+						join_tree->arcs[join_tree->nodes[node].first_arc +
+							join_tree->nodes[node].degree[0] - 1];
+					join_tree->arcs[join_tree->nodes[node].first_arc +
+						join_tree->nodes[node].degree[0] - 1] =
+						join_tree->arcs[join_tree->nodes[node].first_arc +
+						join_tree->nodes[node].degree[0] +
+						join_tree->nodes[node].degree[1] - 1];
+					break;
+				}
+			}
+			join_tree->nodes[node].degree[0]--;
+
+			// Remove arc from split tree:
+			lower_node = split_tree->arcs[split_tree->nodes[leaf].first_arc +
+						split_tree->nodes[leaf].degree[0]];
+			if (split_tree->nodes[leaf].degree[0])
+			{
+				// Join higher node to lower one:
+				higher_node = split_tree->arcs[split_tree->nodes[leaf].first_arc];
+				split_tree->arcs[split_tree->nodes[higher_node].first_arc +
+					split_tree->nodes[higher_node].degree[0]] = lower_node;
+				split_tree->arcs[split_tree->nodes[lower_node].first_arc] =
+									higher_node;
+			}
+			else if (split_tree->nodes[lower_node].degree[0])
+			{
+				split_tree->nodes[lower_node].degree[0]--;
+			}
+		}
+		else // Lower leaf.
+		{
+			// Add arc to contour tree:
+			node = split_tree->arcs[split_tree->nodes[leaf].first_arc];
+
+			contour_tree->arcs[contour_tree->nodes[leaf].first_arc +
+				contour_tree->nodes[leaf].degree[0]] = node;
+			contour_tree->nodes[leaf].degree[0]++;
+
+			contour_tree->arcs[contour_tree->nodes[node].first_arc +
+				up_degrees[node] + contour_tree->nodes[node].degree[1]] = leaf;
+			contour_tree->nodes[node].degree[1]++;
+
+			// Remove arc from split tree:
+			for (uint32_t i = split_tree->nodes[node].degree[0];
+				i < (split_tree->nodes[node].degree[0] +
+				split_tree->nodes[node].degree[1]); i++)
+			{
+				if (split_tree->arcs[split_tree->nodes[node].first_arc + i] == leaf)
+				{
+					split_tree->arcs[split_tree->nodes[node].first_arc + i] =
+						split_tree->arcs[split_tree->nodes[node].first_arc +
+							split_tree->nodes[node].degree[0] +
+							split_tree->nodes[node].degree[1] - 1];
+					break;
+				}
+			}
+			split_tree->nodes[node].degree[1]--;
+
+			// Remove arc from join tree:
+			higher_node = join_tree->arcs[join_tree->nodes[leaf].first_arc];
+			if (join_tree->nodes[leaf].degree[1])
+			{
+				// Join higher node to lower one:
+				lower_node = join_tree->arcs[join_tree->nodes[leaf].first_arc +
+							split_tree->nodes[leaf].degree[1]];
+				join_tree->arcs[join_tree->nodes[higher_node].first_arc +
+					join_tree->nodes[higher_node].degree[0]] = lower_node;
+				join_tree->arcs[join_tree->nodes[lower_node].first_arc] =
+									higher_node;
+			}
+			else if (join_tree->nodes[higher_node].degree[1])
+			{
+				join_tree->nodes[higher_node].degree[1]--;
+			}
+		}
+
+		// Nullify leaf:
+		join_tree->nodes[leaf].degree[0] = join_tree->nodes[leaf].degree[1] = 0;
+		split_tree->nodes[leaf].degree[0] = split_tree->nodes[leaf].degree[1] = 0;
+
+		// Check if connected node is now a leaf:
+		if ((join_tree->nodes[node].degree[0] + split_tree->nodes[node].degree[1]) == 1)
+		{
+			leaf_queue[first_leaf + num_leaves] = node;
+			num_leaves++;
+		}
+	}
+
+	free(leaf_queue);
+	free(up_degrees);
 	return 0;
 }
 
@@ -731,7 +891,6 @@ int ct_tree_scalar_function_y_NEW(ct_tree_t_NEW *tree, ct_mesh_t *mesh,
 {
 	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
 
-	// If creating a new set of nodes, discard old tree:
 	ct_tree_free_NEW(tree);
 	tree->num_nodes = mesh->num_vertices;
 	tree->nodes = malloc(tree->num_nodes * sizeof(ct_tree_node_t_NEW));
@@ -757,7 +916,8 @@ int ct_tree_scalar_function_y_NEW(ct_tree_t_NEW *tree, ct_mesh_t *mesh,
 int ct_tree_scalar_function_z_NEW(ct_tree_t_NEW *tree, ct_mesh_t *mesh,
 			char error_message[NM_MAX_ERROR_LENGTH])
 {
-	// If creating a new set of nodes, discard old tree:
+	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
+
 	ct_tree_free_NEW(tree);
 	tree->num_nodes = mesh->num_vertices;
 	tree->nodes = malloc(tree->num_nodes * sizeof(ct_tree_node_t_NEW));
