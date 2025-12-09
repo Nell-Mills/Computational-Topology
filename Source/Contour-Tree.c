@@ -240,8 +240,6 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	ct_tree_t *split_tree, char error_message[NM_MAX_ERROR_LENGTH])
 {
-	// FIXME - not enough arcs in some contour trees.
-
 	/*****************
 	 * Sanity checks *
 	 *****************/

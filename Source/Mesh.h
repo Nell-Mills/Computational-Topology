@@ -13,7 +13,7 @@ typedef struct
 	float x;
 	float y;
 	float z;
-} ct_position_t;
+} ct_vertex_t;
 
 typedef struct
 {
@@ -46,7 +46,7 @@ typedef struct
 
 typedef struct
 {
-	uint32_t p[3];
+	uint32_t v[3];
 	uint32_t n[3];
 	uint32_t c[3];
 	uint32_t u[3];
@@ -60,7 +60,7 @@ typedef struct
 	uint8_t is_manifold;
 
 	uint32_t num_vertices;
-	ct_position_t *vertices;
+	ct_vertex_t *vertices;
 
 	uint32_t num_normals;
 	ct_normal_t *normals;

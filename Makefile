@@ -21,6 +21,8 @@ DEPS_PROJECT :=\
 $(wildcard Source/*.c)
 
 DEPS_INCLUDE :=\
+Include/Volk/*.c\
+Include/Vulkan-Abstraction/*.c\
 Include/TinyOBJLoaderC/tinyobj_loader_c.c
 
 # Note: if compiling without -fopenmp, add -D _XOPEN_SOURCE=600 and -lrt for timing.

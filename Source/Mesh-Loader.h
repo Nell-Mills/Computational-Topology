@@ -2,7 +2,9 @@
 #define CT_MESH_LOADER_H
 
 #include <ctype.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <NM-Config/Config.h>

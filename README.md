@@ -1,7 +1,6 @@
 # Computational Topology
 
-Implementation of contour tree computation using the "sweep and merge" algorithm, described in the paper [Computing contour trees in all dimensions](https://cdr.lib.unc.edu/concern/articles/sj139b05d).  
-For debug output and functions, define CT_DEBUG when compiling.
+Implementation of contour tree computation using the "sweep and merge" algorithm, described in the paper [Computing contour trees in all dimensions](https://cdr.lib.unc.edu/concern/articles/sj139b05d).
 
 ## Functionality:
 

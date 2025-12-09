@@ -14,7 +14,7 @@ int ct_mesh_allocate(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	ct_mesh_free(mesh);
 	mesh->num_lod_levels = 1;
 
-	mesh->vertices = malloc(mesh->num_vertices * sizeof(ct_position_t));
+	mesh->vertices = malloc(mesh->num_vertices * sizeof(ct_vertex_t));
 	mesh->normals = malloc(mesh->num_normals * sizeof(ct_normal_t));
 	mesh->colours = malloc(mesh->num_colours * sizeof(ct_colour_t));
 	mesh->uv_coordinates = malloc(mesh->num_uv_coordinates * sizeof(ct_uv_t));
@@ -30,7 +30,7 @@ int ct_mesh_allocate(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 		return -1;
 	}
 
-	memset(mesh->vertices, 0, mesh->num_vertices * sizeof(ct_position_t));
+	memset(mesh->vertices, 0, mesh->num_vertices * sizeof(ct_vertex_t));
 	memset(mesh->normals, 0, mesh->num_normals * sizeof(ct_normal_t));
 	memset(mesh->colours, 0, mesh->num_colours * sizeof(ct_colour_t));
 	memset(mesh->uv_coordinates, 0, mesh->num_uv_coordinates * sizeof(ct_uv_t));
@@ -193,8 +193,8 @@ int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			mesh->edges[(i * 3) + j].from		= mesh->faces[0][i].p[j];
-			mesh->edges[(i * 3) + j].to		= mesh->faces[0][i].p[(j + 1) % 3];
+			mesh->edges[(i * 3) + j].from		= mesh->faces[0][i].v[j];
+			mesh->edges[(i * 3) + j].to		= mesh->faces[0][i].v[(j + 1) % 3];
 			mesh->edges[(i * 3) + j].next		= (i * 3) + ((j + 1) % 3);
 			mesh->edges[(i * 3) + j].other_half	= UINT32_MAX;
 
@@ -497,10 +497,10 @@ void ct_mesh_print(FILE *file, ct_mesh_t *mesh)
 		for (int i = 0; i < 3; i++)
 		{
 			fprintf(file, "Vertex %d:\n", i);
-			fprintf(file, "--> Position %u: %f, %f, %f\n", mesh->faces[0][0].p[i],
-				mesh->vertices[mesh->faces[0][0].p[i]].x,
-				mesh->vertices[mesh->faces[0][0].p[i]].y,
-				mesh->vertices[mesh->faces[0][0].p[i]].z);
+			fprintf(file, "--> Position %u: %f, %f, %f\n", mesh->faces[0][0].v[i],
+				mesh->vertices[mesh->faces[0][0].v[i]].x,
+				mesh->vertices[mesh->faces[0][0].v[i]].y,
+				mesh->vertices[mesh->faces[0][0].v[i]].z);
 			fprintf(file, "--> Normal %u: %d, %d, %d\n", mesh->faces[0][0].n[i],
 				mesh->normals[mesh->faces[0][0].n[i]].x,
 				mesh->normals[mesh->faces[0][0].n[i]].y,

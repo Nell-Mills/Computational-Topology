@@ -142,7 +142,7 @@ int ct_mesh_load_obj(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			mesh->faces[0][i].p[j] = attrib.faces[(i * 3) + j].v_idx;
+			mesh->faces[0][i].v[j] = attrib.faces[(i * 3) + j].v_idx;
 			mesh->faces[0][i].n[j] = 0;
 			mesh->faces[0][i].c[j] = 0;
 			mesh->faces[0][i].u[j] = 0;
@@ -192,7 +192,7 @@ int ct_mesh_write_obj(FILE *file, ct_mesh_t *mesh, char error_message[NM_MAX_ERR
 		fprintf(file, "f");
 		for (int j = 0; j < 3; j++)
 		{
-			fprintf(file, " %u/%u/%u", mesh->faces[0][i].p[j] + 1,
+			fprintf(file, " %u/%u/%u", mesh->faces[0][i].v[j] + 1,
 				mesh->faces[0][i].u[j] + 1, mesh->faces[0][i].n[j] + 1);
 		}
 		fprintf(file, "\n");
@@ -342,7 +342,7 @@ int ct_mesh_load_voxels(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]
 			position++;
 			float decimal = 0.f;
 			float multiplier = 1.f;
-			while((position < end) && (*position >= '0') && (*position <= '9'))
+			while ((position < end) && (*position >= '0') && (*position <= '9'))
 			{
 				decimal = (decimal * 10.f) + ((*position - '0') * 1.f);
 				multiplier *= 10.f;
