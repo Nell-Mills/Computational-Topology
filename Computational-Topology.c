@@ -5,7 +5,6 @@
 #include <NM-Config/Config.h>
 
 #include "Source/Computational-Topology.h"
-#include "Source/GUI.h"
 
 void get_time(struct timespec *timer);
 void print_time_end(FILE *file, struct timespec *start, char *message);
@@ -25,9 +24,6 @@ int main(int argc, char **argv)
 	if (argc > 1) { strcpy(mesh.path, argv[1]); }
 	else { strcpy(mesh.path, "Meshes/spot.obj"); }
 	strcpy(mesh.name, mesh.path);
-
-	// GUI setup:
-	if (ct_gui_setup(&gui)) { goto error; }
 
 	// Mesh load:
 	get_time(&start);
@@ -89,6 +85,9 @@ int main(int argc, char **argv)
 	#endif
 	print_time_end(stdout, &start, "(contour tree):\t");
 
+	// GUI setup:
+	if (ct_gui_setup(&gui)) { goto error; }
+
 	// Main loop:
 	SDL_Event event;
 	int running = 1;
@@ -113,7 +112,7 @@ int main(int argc, char **argv)
 
 	// Cleanup, failure:
 	error:
-	if (!strcmp(gui.vulkan.error_message, ""))
+	if (strcmp(gui.vulkan.error_message, ""))
 	{
 		fprintf(stdout, "Error: %s\n", gui.vulkan.error_message);
 	}

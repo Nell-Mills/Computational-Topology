@@ -44,7 +44,7 @@ int ct_gui_setup(ct_gui_t *gui)
 	gui->mesh_render_info.colour_clear_value.color.float32[2] = 0.5f;
 	gui->mesh_render_info.colour_clear_value.color.float32[3] = 1.f;
 	gui->mesh_render_info.colour_load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
-	// TODO depth information.
+	// TODO depth information. Clear value 1.f.
 
 	strcpy(gui->object_buffers.name, "CT object vertex buffers");
 	// TODO object buffers.
@@ -64,6 +64,8 @@ int ct_gui_object_setup(ct_gui_t *gui, ct_mesh_t *mesh, ct_tree_t *join_tree,
 	vka_destroy_vertex_buffers(&(gui->vulkan), &(gui->split_tree_buffers));
 	vka_destroy_vertex_buffers(&(gui->vulkan), &(gui->join_tree_buffers));
 	vka_destroy_vertex_buffers(&(gui->vulkan), &(gui->object_buffers));
+
+
 
 	return 0;
 }
