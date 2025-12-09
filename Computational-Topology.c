@@ -16,6 +16,7 @@ int main(int argc, char **argv)
 	struct timespec start;
 	ct_gui_t gui = {0};
 	ct_mesh_t mesh = {0};
+	ct_mesh_gpu_ready_t mesh_gpu = {0};
 	ct_tree_t join_tree = {0};
 	ct_tree_t split_tree = {0};
 	ct_tree_t contour_tree = {0};
@@ -30,7 +31,7 @@ int main(int argc, char **argv)
 	if (ct_mesh_load(&mesh, error_message)) { goto error; }
 	#ifdef CT_DEBUG
 	fprintf(stdout, "\n");
-	ct_mesh_print_short(stdout, &mesh);
+	ct_mesh_print(stdout, &mesh);
 	#endif
 	print_time_end(stdout, &start, "(mesh load):\t\t");
 
@@ -39,6 +40,16 @@ int main(int argc, char **argv)
 	if (ct_tree_scalar_function_y(&join_tree, &mesh, error_message)) { goto error; }
 	if (ct_tree_copy_nodes(&join_tree, &split_tree, error_message)) { goto error; }
 	print_time_end(stdout, &start, "(vertex sorting):\t");
+
+	// Mesh GPU conversion:
+	strcpy(mesh_gpu.name, "GPU Mesh");
+	get_time(&start);
+	if (ct_mesh_prepare_for_gpu(&mesh, &mesh_gpu, error_message)) { goto error; }
+	#ifdef CT_DEBUG
+	fprintf(stdout, "\n");
+	ct_mesh_gpu_ready_print(stdout, &mesh_gpu);
+	#endif
+	print_time_end(stdout, &start, "(mesh convert):\t");
 
 	// Merge tree computation:
 	get_time(&start);
@@ -106,6 +117,7 @@ int main(int argc, char **argv)
 	ct_tree_free(&join_tree);
 	ct_tree_free(&split_tree);
 	ct_tree_free(&contour_tree);
+	ct_mesh_gpu_ready_free(&mesh_gpu);
 	ct_mesh_free(&mesh);
 	ct_gui_shutdown(&gui);
 	return 0;
@@ -120,6 +132,7 @@ int main(int argc, char **argv)
 	ct_tree_free(&join_tree);
 	ct_tree_free(&split_tree);
 	ct_tree_free(&contour_tree);
+	ct_mesh_gpu_ready_free(&mesh_gpu);
 	ct_mesh_free(&mesh);
 	ct_gui_shutdown(&gui);
 	return -1;

@@ -84,15 +84,12 @@ int ct_mesh_load_obj(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 
 	mesh->num_vertices = attrib.num_vertices;
 	mesh->num_normals = attrib.num_normals;
-	mesh->num_colours = attrib.num_normals; // TinyOBJC doesn't use colours, so use normals.
-	mesh->num_uv_coordinates = attrib.num_texcoords;
+	mesh->num_colours = 1; // TinyOBJC doesn't use colours.
+	mesh->num_uvs = attrib.num_texcoords;
 	mesh->num_edges = attrib.num_face_num_verts * 3;
-	for (int i = 0; i < NM_MAX_LOD_LEVELS; i++)
-	{
-		mesh->num_faces[i] = attrib.num_face_num_verts;
-	}
+	mesh->num_faces = attrib.num_face_num_verts;
 
-	if (!mesh->num_vertices || !mesh->num_faces[0])
+	if (!mesh->num_vertices || !mesh->num_faces)
 	{
 		snprintf(error_message, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no vertices/faces.", mesh->name);
@@ -102,8 +99,7 @@ int ct_mesh_load_obj(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 
 	// If any array is empty, fill it with a single element:
 	if (!mesh->num_normals) { mesh->num_normals = 1; }
-	if (!mesh->num_colours) { mesh->num_colours = 1; }
-	if (!mesh->num_uv_coordinates) { mesh->num_uv_coordinates = 1; }
+	if (!mesh->num_uvs) { mesh->num_uvs = 1; }
 
 	if (ct_mesh_allocate(mesh, error_message))
 	{
@@ -120,40 +116,37 @@ int ct_mesh_load_obj(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 		mesh->vertices[i].z = attrib.vertices[(i * 3) + 2];
 	}
 
+	if (!attrib.num_normals) { mesh->normals[0].y = 127; }
 	for (unsigned int i = 0; i < attrib.num_normals; i++)
 	{
 		mesh->normals[i].x = attrib.normals[i * 3] * 127.5;
 		mesh->normals[i].y = attrib.normals[(i * 3) + 1] * 127.5;
 		mesh->normals[i].z = attrib.normals[(i * 3) + 2] * 127.5;
-
-		mesh->colours[i].r = attrib.normals[i * 3] * 255;
-		mesh->colours[i].g = attrib.normals[(i * 3) + 1] * 255;
-		mesh->colours[i].b = attrib.normals[(i * 3) + 2] * 255;
-		mesh->colours[i].a = 255;
 	}
+
+	mesh->colours[0].r = mesh->colours[0].g = mesh->colours[0].b = mesh->colours[0].a = 255;
 
 	for (unsigned int i = 0; i < attrib.num_texcoords; i++)
 	{
-		mesh->uv_coordinates[i].u = attrib.texcoords[i * 2];
-		mesh->uv_coordinates[i].v = attrib.texcoords[(i * 2) + 1];
+		mesh->uvs[i].u = attrib.texcoords[i * 2];
+		mesh->uvs[i].v = attrib.texcoords[(i * 2) + 1];
 	}
 
 	for (unsigned int i = 0; i < attrib.num_face_num_verts; i++)
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			mesh->faces[0][i].v[j] = attrib.faces[(i * 3) + j].v_idx;
-			mesh->faces[0][i].n[j] = 0;
-			mesh->faces[0][i].c[j] = 0;
-			mesh->faces[0][i].u[j] = 0;
+			mesh->faces[i].vertices[j].v = attrib.faces[(i * 3) + j].v_idx;
+			mesh->faces[i].vertices[j].n = 0;
+			mesh->faces[i].vertices[j].c = 0;
+			mesh->faces[i].vertices[j].u = 0;
 			if (attrib.num_normals > 0)
 			{
-				mesh->faces[0][i].n[j] = attrib.faces[(i * 3) + j].vn_idx;
-				mesh->faces[0][i].c[j] = attrib.faces[(i * 3) + j].vn_idx;
+				mesh->faces[i].vertices[j].n = attrib.faces[(i * 3) + j].vn_idx;
 			}
 			if (attrib.num_texcoords > 0)
 			{
-				mesh->faces[0][i].u[j] = attrib.faces[(i * 3) + j].vt_idx;
+				mesh->faces[i].vertices[j].u = attrib.faces[(i * 3) + j].vt_idx;
 			}
 		}
 	}
@@ -182,18 +175,19 @@ int ct_mesh_write_obj(FILE *file, ct_mesh_t *mesh, char error_message[NM_MAX_ERR
 						(mesh->normals[i].z * 1.f) / 127.5f);
 	}
 
-	for (uint32_t i = 0; i < mesh->num_uv_coordinates; i++)
+	for (uint32_t i = 0; i < mesh->num_uvs; i++)
 	{
-		fprintf(file, "vt %f %f\n", mesh->uv_coordinates[i].u, mesh->uv_coordinates[i].v);
+		fprintf(file, "vt %f %f\n", mesh->uvs[i].u, mesh->uvs[i].v);
 	}
 
-	for (uint32_t i = 0; i < mesh->num_faces[0]; i++)
+	for (uint32_t i = 0; i < mesh->num_faces; i++)
 	{
 		fprintf(file, "f");
 		for (int j = 0; j < 3; j++)
 		{
-			fprintf(file, " %u/%u/%u", mesh->faces[0][i].v[j] + 1,
-				mesh->faces[0][i].u[j] + 1, mesh->faces[0][i].n[j] + 1);
+			fprintf(file, " %u/%u/%u", mesh->faces[i].vertices[j].v + 1,
+						mesh->faces[i].vertices[j].u + 1,
+						mesh->faces[i].vertices[j].n + 1);
 		}
 		fprintf(file, "\n");
 	}
