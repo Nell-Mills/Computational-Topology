@@ -2,6 +2,20 @@
 
 int ct_program_setup(ct_program_t *program)
 {
+	#ifdef CT_DEBUG
+	if (sizeof(ct_scene_uniform_t) > 16384) // Change to 65536 if needed.
+	{
+		snprintf(program->error, NM_MAX_ERROR_LENGTH, "Scene uniform is too large.");
+		return -1;
+	}
+	if ((sizeof(ct_scene_uniform_t) % 4) != 0)
+	{
+		snprintf(program->error, NM_MAX_ERROR_LENGTH,
+			"Scene uniform size is not a multiple of 4.");
+		return -1;
+	}
+	#endif
+
 	strcpy(program->vulkan.name, "Contour Tree");
 	program->vulkan.window_resizable = 1;
 	program->vulkan.minimum_window_width = 1080;
@@ -38,7 +52,7 @@ int ct_program_setup(ct_program_t *program)
 	program->mesh_pipeline.formats[2] = VK_FORMAT_R32_SFLOAT;
 	program->mesh_pipeline.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	program->mesh_pipeline.colour_attachment_format = program->vulkan.swapchain_format;
-//	program->mesh_pipeline.blend_enable = VK_TRUE;
+	program->mesh_pipeline.blend_enable = VK_TRUE;
 	// TODO depth information.
 
 	if (vka_create_pipeline(&(program->vulkan), &(program->mesh_pipeline)))
@@ -47,9 +61,9 @@ int ct_program_setup(ct_program_t *program)
 		return -1;
 	}
 
-	program->render_info.colour_clear_value.color.float32[0] = 0.5f;
-	program->render_info.colour_clear_value.color.float32[1] = 0.5f;
-	program->render_info.colour_clear_value.color.float32[2] = 0.5f;
+	program->render_info.colour_clear_value.color.float32[0] = 0.3f;
+	program->render_info.colour_clear_value.color.float32[1] = 0.3f;
+	program->render_info.colour_clear_value.color.float32[2] = 0.3f;
 	program->render_info.colour_clear_value.color.float32[3] = 1.f;
 	program->render_info.colour_load_op = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	// TODO depth information. Clear value 1.f.

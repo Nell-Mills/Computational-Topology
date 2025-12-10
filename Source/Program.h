@@ -5,10 +5,17 @@
 
 #include <NM-Config/Config.h>
 #include <Vulkan-Abstraction/Vulkan-Abstraction.h>
+#include <CGLM/cglm.h>
 
 #include "Contour-Tree.h"
 #include "Mesh.h"
 #include "Mesh-Loader.h"
+
+typedef struct
+{
+	mat4 MVP;
+	float isovalue;
+} ct_scene_uniform_t;
 
 typedef struct
 {
