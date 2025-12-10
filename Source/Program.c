@@ -90,6 +90,10 @@ int ct_program_object_setup(ct_program_t *program)
 		goto error;
 	}
 
+	#ifdef CT_DEBUG
+	ct_mesh_print_short(stdout, &(program->mesh));
+	#endif
+
 	// Check if mesh is manifold:
 	if (!program->mesh.is_manifold)
 	{
@@ -141,6 +145,11 @@ int ct_program_object_setup(ct_program_t *program)
 	// Create temporary GPU-ready mesh:
 	strcpy(gpu_mesh.name, program->mesh.name);
 	if (ct_mesh_prepare_for_gpu(&(program->mesh), &gpu_mesh, program->error)) { goto error; }
+
+	#ifdef CT_DEBUG
+	fprintf(stdout, "\n");
+	ct_mesh_gpu_ready_print_short(stdout, &gpu_mesh);
+	#endif
 
 	// Assign scalar values to mesh:
 	scalars = malloc(gpu_mesh.num_vertices * sizeof(float));
@@ -339,7 +348,7 @@ int ct_program_render(ct_program_t *program)
 					&(program->index_buffer), 3, program->vertex_buffers);
 
 	vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
-							program->mesh.num_faces, 0, 0);
+							program->mesh.num_faces * 3, 0, 0);
 
 	vka_end_rendering(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 								&(program->render_info));
