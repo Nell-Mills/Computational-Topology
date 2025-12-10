@@ -38,7 +38,7 @@ int ct_program_setup(ct_program_t *program)
 	program->mesh_pipeline.formats[2] = VK_FORMAT_R32_SFLOAT;
 	program->mesh_pipeline.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 	program->mesh_pipeline.colour_attachment_format = program->vulkan.swapchain_format;
-	program->mesh_pipeline.blend_enable = VK_TRUE;
+//	program->mesh_pipeline.blend_enable = VK_TRUE;
 	// TODO depth information.
 
 	if (vka_create_pipeline(&(program->vulkan), &(program->mesh_pipeline)))
@@ -160,12 +160,17 @@ int ct_program_object_setup(ct_program_t *program)
 			gpu_mesh.name);
 		goto error;
 	}
+	float offset = -(program->join_tree.nodes[0].value);
+	float divide_by = program->join_tree.nodes[program->join_tree.num_nodes - 1].value -
+							program->join_tree.nodes[0].value;
 	uint32_t scalar_index;
 	for (uint32_t i = 0; i < gpu_mesh.num_vertices; i++)
 	{
 		scalar_index = gpu_mesh.original_index[i];
 		scalar_index = program->join_tree.nodes[scalar_index].vertex_to_node;
 		scalars[i] = program->join_tree.nodes[scalar_index].value;
+		scalars[i] += offset;
+		scalars[i] /= divide_by;
 	}
 
 	// Create mesh allocation and index/vertex buffers:
