@@ -4,12 +4,12 @@
  * Meshes *
  **********/
 
-int ct_mesh_allocate(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_allocate(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
 	if (!mesh->num_vertices || !mesh->num_normals || !mesh->num_colours ||
 		!mesh->num_uvs || !mesh->num_edges || !mesh->num_faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has fewer attributes than required for allocation.",
 			mesh->name);
 		return -1;
@@ -27,7 +27,7 @@ int ct_mesh_allocate(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
 	if (!mesh->vertices || !mesh->normals || !mesh->colours ||
 		!mesh->uvs || !mesh->edges || !mesh->first_edge || !mesh->faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for mesh \"%s\".", mesh->name);
 		ct_mesh_free(mesh);
 		return -1;
@@ -89,88 +89,85 @@ void ct_mesh_free(ct_mesh_t *mesh)
 	}
 }
 
-int ct_mesh_check_validity(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_check_validity(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
 	if (mesh->num_vertices < 3)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has fewer than 3 vertices.", mesh->name);
 		return -1;
 	}
 	if (!mesh->vertices)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for vertices.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->num_normals)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Mesh \"%s\" has no normals.", mesh->name);
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Mesh \"%s\" has no normals.", mesh->name);
 		return -1;
 	}
 	if (!mesh->normals)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for normals.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->num_colours)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Mesh \"%s\" has no colours.", mesh->name);
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Mesh \"%s\" has no colours.", mesh->name);
 		return -1;
 	}
 	if (!mesh->colours)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for colours.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->num_uvs)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no UV coordinates.", mesh->name);
 		return -1;
 	}
 	if (!mesh->uvs)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for UV coordinates.", mesh->name);
 		return -1;
 	}
 
 	if (mesh->num_edges < 3)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has fewer than 3 edges.", mesh->name);
 		return -1;
 	}
 	if (!mesh->edges)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for edges.", mesh->name);
 		return -1;
 	}
 	if (!mesh->first_edge)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for first edge.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->num_faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Mesh \"%s\" has no faces.", mesh->name);
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Mesh \"%s\" has no faces.", mesh->name);
 		return -1;
 	}
 	if (!mesh->faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for faces.", mesh->name);
 		return -1;
 	}
@@ -178,9 +175,9 @@ int ct_mesh_check_validity(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	return 0;
 }
 
-int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
-	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error)) { return -1; }
 
 	for (uint32_t i = 0; i < mesh->num_faces; i++)
 	{
@@ -199,7 +196,7 @@ int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 	ct_edge_t *edges = malloc(mesh->num_edges * sizeof(ct_edge_t));
 	if (!edges)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for edge sorting on mesh \"%s\".", mesh->name);
 		return -1;
 	}
@@ -224,15 +221,15 @@ int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LEN
 	return 0;
 }
 
-int ct_mesh_check_manifold(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_check_manifold(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
-	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error)) { return -1; }
 
 	uint8_t is_manifold = 1;
 	ct_edge_t *edges = malloc(mesh->num_edges * sizeof(ct_edge_t));
 	if (!edges)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for edge sorting on mesh \"%s\".", mesh->name);
 		return -1;
 	}
@@ -279,7 +276,7 @@ int ct_mesh_check_manifold(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENG
 	uint32_t *vertex_degrees = malloc(mesh->num_vertices * sizeof(uint32_t));
 	if (!vertex_degrees)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for vertex degrees on mesh \"%s\".", mesh->name);
 		free(edges);
 		return -1;
@@ -404,11 +401,11 @@ uint32_t ct_mesh_get_previous_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint
  * GPU-ready meshes *
  ********************/
 
-int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error_message[NM_MAX_ERROR_LENGTH])
+int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
 	if (!mesh->num_vertices || !mesh->num_faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has fewer attributes than required for allocation.",
 			mesh->name);
 		return -1;
@@ -425,7 +422,7 @@ int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error_message[NM_
 	if (!mesh->vertices || !mesh->normals || !mesh->colours ||
 		!mesh->uvs || !mesh->original_index || !mesh->faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for mesh \"%s\".", mesh->name);
 		ct_mesh_gpu_ready_free(mesh);
 		return -1;
@@ -455,59 +452,58 @@ void ct_mesh_gpu_ready_free(ct_mesh_gpu_ready_t *mesh)
 }
 
 int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh,
-		char error_message[NM_MAX_ERROR_LENGTH])
+		char error[NM_MAX_ERROR_LENGTH])
 {
 	if (mesh->num_vertices < 3)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has fewer than 3 vertices.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->vertices)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for vertices.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->normals)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for normals.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->colours)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for colours.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->uvs)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for UV coordinates.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->original_index)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for original indices.", mesh->name);
 		return -1;
 	}
 
 	if (!mesh->num_faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Mesh \"%s\" has no faces.", mesh->name);
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Mesh \"%s\" has no faces.", mesh->name);
 		return -1;
 	}
 	if (!mesh->faces)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for faces.", mesh->name);
 		return -1;
 	}
@@ -516,9 +512,9 @@ int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh,
 }
 
 int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
-				char error_message[NM_MAX_ERROR_LENGTH])
+					char error[NM_MAX_ERROR_LENGTH])
 {
-	if (ct_mesh_check_validity(mesh_old, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh_old, error)) { return -1; }
 	ct_mesh_gpu_ready_free(mesh_new);
 
 	uint32_t num_face_vertices = mesh_old->num_faces * 3;
@@ -527,7 +523,7 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 	uint32_t *face_vertices = malloc(num_face_vertices * 5 * sizeof(uint32_t));
 	if (!face_vertices)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for unique vertex tracking in mesh \"%s\".",
 			mesh_old->name);
 		return -1;
@@ -552,7 +548,7 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 	uint32_t *unique_vertices = malloc(num_face_vertices * sizeof(uint32_t));
 	if (!unique_vertices)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for unique vertex mapping in mesh \"%s\".",
 			mesh_old->name);
 		free(face_vertices);
@@ -576,7 +572,7 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 	// Memory requirements of the new mesh are now known:
 	mesh_new->num_vertices = num_unique_vertices;
 	mesh_new->num_faces = mesh_old->num_faces;
-	if (ct_mesh_gpu_ready_allocate(mesh_new, error_message))
+	if (ct_mesh_gpu_ready_allocate(mesh_new, error))
 	{
 		free(unique_vertices);
 		free(face_vertices);

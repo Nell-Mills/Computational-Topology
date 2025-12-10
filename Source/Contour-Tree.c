@@ -31,16 +31,14 @@ int ct_tree_node_is_critical(ct_tree_node_t *node)
 		!((node->degree[0] == 0) && (node->degree[1] == 0)));
 }
 
-int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to,
-			char error_message[NM_MAX_ERROR_LENGTH])
+int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to, char error[NM_MAX_ERROR_LENGTH])
 {
 	ct_tree_free(to);
 	to->num_nodes = from->num_nodes;
 	to->nodes = malloc(to->num_nodes * sizeof(ct_tree_node_t));
 	if (!to->nodes)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for tree nodes.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for tree nodes.");
 		return -1;
 	}
 	memcpy(to->nodes, from->nodes, to->num_nodes * sizeof(ct_tree_node_t));
@@ -74,22 +72,22 @@ int ct_tree_nodes_qsort_compare(const void *a, const void *b)
  *********************/
 
 int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
-	uint32_t start_index, char error_message[NM_MAX_ERROR_LENGTH])
+	uint32_t start_index, char error[NM_MAX_ERROR_LENGTH])
 {
 	if (!merge_tree->num_nodes || !merge_tree->nodes)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Merge tree has no nodes.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Merge tree has no nodes.");
 		return -1;
 	}
 
 	ct_disjoint_set_t disjoint_set = {0};
 	disjoint_set.num_elements = merge_tree->num_nodes;
-	if (ct_disjoint_set_allocate(&disjoint_set, error_message)) { return -1; }
+	if (ct_disjoint_set_allocate(&disjoint_set, error)) { return -1; }
 
 	merge_tree->arcs = malloc(merge_tree->num_nodes * 2 * sizeof(uint32_t));
 	if (!merge_tree->arcs)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for merge tree arcs.");
 		ct_disjoint_set_free(&disjoint_set);
 		return -1;
@@ -209,8 +207,7 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 	merge_tree->roots = malloc(merge_tree->num_nodes * sizeof(uint32_t));
 	if (!merge_tree->roots)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for tree roots.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for tree roots.");
 		ct_disjoint_set_free(&disjoint_set);
 		return -1;
 	}
@@ -227,8 +224,7 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 	merge_tree->roots = realloc(merge_tree->roots, merge_tree->num_roots * sizeof(uint32_t));
 	if (!merge_tree->roots)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not reallocate memory for tree roots.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not reallocate memory for tree roots.");
 		ct_disjoint_set_free(&disjoint_set);
 		return -1;
 	}
@@ -238,7 +234,7 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 }
 
 int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
-	ct_tree_t *split_tree, char error_message[NM_MAX_ERROR_LENGTH])
+		ct_tree_t *split_tree, char error[NM_MAX_ERROR_LENGTH])
 {
 	/*****************
 	 * Sanity checks *
@@ -246,31 +242,29 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 
 	if (!join_tree->nodes || !join_tree->arcs || !join_tree->roots)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Join tree is incomplete.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Join tree is incomplete.");
 		return -1;
 	}
 	if (!split_tree->nodes || !split_tree->arcs || !split_tree->roots)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Split tree is incomplete.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Split tree is incomplete.");
 		return -1;
 	}
 	if (join_tree->num_arcs != (join_tree->num_nodes - join_tree->num_roots))
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Join tree has incorrect number of arcs.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Join tree has incorrect number of arcs.");
 		return -1;
 	}
 	if (split_tree->num_arcs != (split_tree->num_nodes - split_tree->num_roots))
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Split tree has incorrect number of arcs.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Split tree has incorrect number of arcs.");
 		return -1;
 	}
 	if ((join_tree->num_nodes != split_tree->num_nodes) ||
 		(join_tree->num_arcs != split_tree->num_arcs) ||
 		(join_tree->num_roots != split_tree->num_roots))
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH, "Join and split tree do not match.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Join and split tree do not match.");
 		return -1;
 	}
 
@@ -282,7 +276,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	contour_tree->nodes = malloc(contour_tree->num_nodes * sizeof(ct_tree_node_t));
 	if (!contour_tree->nodes)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for contour tree nodes.");
 		return -1;
 	}
@@ -312,7 +306,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	contour_tree->arcs = malloc(contour_tree->num_arcs * 2 * sizeof(uint32_t));
 	if (!contour_tree->arcs)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for contour tree arcs.");
 		return -1;
 	}
@@ -323,7 +317,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	contour_tree->roots = malloc(contour_tree->num_roots * sizeof(uint32_t));
 	if (!contour_tree->roots)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for contour tree roots.");
 		return -1;
 	}
@@ -337,8 +331,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	uint32_t *up_degrees = malloc(contour_tree->num_nodes * sizeof(uint32_t));
 	if (!up_degrees)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for up degrees.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for up degrees.");
 		return -1;
 	}
 
@@ -348,8 +341,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	uint32_t *leaf_queue = malloc(contour_tree->num_nodes * sizeof(uint32_t));
 	if (!leaf_queue)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for leaf queue.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for leaf queue.");
 		free(up_degrees);
 		return -1;
 	}
@@ -524,18 +516,16 @@ int ct_index_increment_split(uint32_t *index, uint32_t limit)
  * Scalar functions *
  ********************/
 
-int ct_tree_scalar_function_y(ct_tree_t *tree, ct_mesh_t *mesh,
-		char error_message[NM_MAX_ERROR_LENGTH])
+int ct_tree_scalar_function_y(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
-	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error)) { return -1; }
 
 	ct_tree_free(tree);
 	tree->num_nodes = mesh->num_vertices;
 	tree->nodes = malloc(tree->num_nodes * sizeof(ct_tree_node_t));
 	if (!tree->nodes)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for tree nodes.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for tree nodes.");
 		return -1;
 	}
 	memset(tree->nodes, 0, tree->num_nodes * sizeof(ct_tree_node_t));
@@ -551,18 +541,16 @@ int ct_tree_scalar_function_y(ct_tree_t *tree, ct_mesh_t *mesh,
 	return 0;
 }
 
-int ct_tree_scalar_function_z(ct_tree_t *tree, ct_mesh_t *mesh,
-		char error_message[NM_MAX_ERROR_LENGTH])
+int ct_tree_scalar_function_z(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
-	if (ct_mesh_check_validity(mesh, error_message)) { return -1; }
+	if (ct_mesh_check_validity(mesh, error)) { return -1; }
 
 	ct_tree_free(tree);
 	tree->num_nodes = mesh->num_vertices;
 	tree->nodes = malloc(tree->num_nodes * sizeof(ct_tree_node_t));
 	if (!tree->nodes)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for tree nodes.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for tree nodes.");
 		return -1;
 	}
 	memset(tree->nodes, 0, tree->num_nodes * sizeof(ct_tree_node_t));
@@ -582,16 +570,14 @@ int ct_tree_scalar_function_z(ct_tree_t *tree, ct_mesh_t *mesh,
  * Disjoint sets *
  *****************/
 
-int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set,
-		char error_message[NM_MAX_ERROR_LENGTH])
+int ct_disjoint_set_allocate(ct_disjoint_set_t *disjoint_set, char error[NM_MAX_ERROR_LENGTH])
 {
 	disjoint_set->parent = malloc(disjoint_set->num_elements * sizeof(uint32_t));
 	disjoint_set->rank = malloc(disjoint_set->num_elements * sizeof(uint32_t));
 	disjoint_set->extremum = malloc(disjoint_set->num_elements * sizeof(uint32_t));
 	if (!disjoint_set->parent || !disjoint_set->rank || !disjoint_set->extremum)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for disjoint set.");
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for disjoint set.");
 		return -1;
 	}
 
@@ -722,7 +708,7 @@ void ct_tree_print(FILE *file, ct_tree_t *tree)
 }
 
 int ct_tree_build_test_case(ct_tree_t *join_tree, ct_tree_t *split_tree,
-						char error_message[NM_MAX_ERROR_LENGTH])
+				char error[NM_MAX_ERROR_LENGTH])
 {
 	float node_labels[18] = { 1.f, 2.f, 2.1f, 3.f, 4.f, 4.6f,
 				4.9f, 5.f, 6.f, 6.1f, 6.5f, 6.9f,
@@ -743,7 +729,7 @@ int ct_tree_build_test_case(ct_tree_t *join_tree, ct_tree_t *split_tree,
 	if (!join_tree->nodes || !join_tree->arcs || !join_tree->roots ||
 		!split_tree->nodes || !split_tree->arcs || !split_tree->roots)
 	{
-		snprintf(error_message, NM_MAX_ERROR_LENGTH,
+		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for test case join and split trees.");
 		return -1;
 	}

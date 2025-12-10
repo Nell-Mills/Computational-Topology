@@ -33,7 +33,7 @@ DEPS	:= $(DEPS_PROJECT) $(DEPS_INCLUDE)
 CFLAGS	:= -I Include -fopenmp
 LFLAGS	:= -lSDL3
 DEFINES	:=
-DEBUG	:= -D CT_DEBUG -g -O0
+DEBUG	:= -D CT_DEBUG -D VKA_DEBUG -g -O0
 
 release: $(MAIN)
 	$(DEPS_CLONE) $(CC) $(MAIN) $(DEPS) $(DEFINES) $(CFLAGS) $(OUT) $(LFLAGS)

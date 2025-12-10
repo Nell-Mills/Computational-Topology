@@ -106,23 +106,22 @@ typedef struct
 } ct_mesh_gpu_ready_t;
 
 // Meshes:
-int ct_mesh_allocate(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_allocate(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 void ct_mesh_free(ct_mesh_t *mesh);
-int ct_mesh_check_validity(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
-int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
-int ct_mesh_check_manifold(ct_mesh_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_check_validity(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_check_manifold(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 uint32_t ct_mesh_triangle_fan_check(ct_mesh_t *mesh, uint32_t vertex, uint32_t vertex_degree);
 uint32_t ct_mesh_get_edge_index(ct_edge_t *edge);
 uint32_t ct_mesh_get_next_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge);
 uint32_t ct_mesh_get_previous_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint32_t edge);
 
 // GPU-ready meshes:
-int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error_message[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 void ct_mesh_gpu_ready_free(ct_mesh_gpu_ready_t *mesh);
-int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh,
-		char error_message[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
-				char error_message[NM_MAX_ERROR_LENGTH]);
+					char error[NM_MAX_ERROR_LENGTH]);
 
 // Sorting:
 int ct_mesh_edge_qsort_compare_from(const void *a, const void *b);
