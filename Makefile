@@ -25,13 +25,12 @@ Include/Volk/*.c\
 Include/Vulkan-Abstraction/*.c\
 Include/TinyOBJLoaderC/tinyobj_loader_c.c
 
-# Note: if compiling without -fopenmp, add -D _XOPEN_SOURCE=600 and -lrt for timing.
 CC	:= gcc -std=c99 -Wall -Wextra -Wno-unused-parameter
 OUT	:= -o Computational-Topology
 MAIN	:= Computational-Topology.c
 DEPS	:= $(DEPS_PROJECT) $(DEPS_INCLUDE)
 CFLAGS	:= -I Include -fopenmp
-LFLAGS	:= -lSDL3
+LFLAGS	:= -L Libs -Wl,-rpath '$$ORIGIN/Libs' -lSDL3
 DEFINES	:=
 DEBUG	:= -D CT_DEBUG -D VKA_DEBUG -g -O0
 
