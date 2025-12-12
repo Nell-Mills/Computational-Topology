@@ -36,6 +36,7 @@ int main(int argc, char **argv)
 			if (event.type == SDL_EVENT_QUIT) { running = 0; }
 		}
 
+		ct_program_process_input(&program);
 		if (ct_program_start_frame(&program)) { break; }
 		if (ct_program_render(&program)) { break; }
 	}

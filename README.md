@@ -8,7 +8,7 @@ Implementation of contour tree computation using the "sweep and merge" algorithm
 - Edge/connectivity information:
     - Vertices (from, to).
     - Next edge in face.
-    - Other half edge. Boundary edges have a value of -1 here.
+    - Other half edge. Boundary edges have a value of UINT32_MAX here.
     - Edges are ordered by face, so face index is implicit.
 - Manifold check: allows for boundary edges.
 - Scalar field preprocessing - sorting by scalar value, with simulation of simplicity by index

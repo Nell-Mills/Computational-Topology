@@ -11,9 +11,14 @@
 #include "Mesh.h"
 #include "Mesh-Loader.h"
 
+#define CT_CLIP_NEAR	    0.1f
+#define CT_CLIP_FAR	10000.0f
+
 typedef struct
 {
-	mat4 MVP;
+	mat4 model;
+	mat4 view;
+	mat4 projection;
 	float isovalue;
 } ct_scene_uniform_t;
 
@@ -21,10 +26,21 @@ typedef struct
 {
 	vka_vulkan_t vulkan;
 	vka_command_buffer_t command_buffer;
-	vka_render_info_t render_info;
+	vka_descriptor_pool_t descriptor_pool;
 
 	// TODO Nuklear GUI things.
 
+	float translate_speed;
+	float rotate_speed;
+	vec3 mesh_centre;
+	uint8_t update_scene_uniform;
+
+	ct_scene_uniform_t scene_uniform;
+	vka_allocation_t scene_uniform_allocation;
+	vka_buffer_t scene_uniform_buffer;
+	vka_descriptor_set_t scene_uniform_descriptor_set;
+
+	vka_render_info_t render_info;
 	vka_pipeline_t mesh_pipeline;
 	vka_allocation_t buffer_allocation;
 	vka_buffer_t index_buffer;
@@ -45,6 +61,7 @@ void ct_program_shutdown(ct_program_t *program);
 int ct_program_object_setup(ct_program_t *program);
 void ct_program_object_shutdown(ct_program_t *program);
 
+void ct_program_process_input(ct_program_t *program);
 void ct_program_update_window_size(ct_program_t *program);
 int ct_program_start_frame(ct_program_t *program);
 int ct_program_render(ct_program_t *program);

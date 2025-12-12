@@ -3,7 +3,7 @@
 int ct_program_setup(ct_program_t *program)
 {
 	#ifdef CT_DEBUG
-	if (sizeof(ct_scene_uniform_t) > 16384) // Change to 65536 if needed.
+	if (sizeof(ct_scene_uniform_t) > 65536)
 	{
 		snprintf(program->error, NM_MAX_ERROR_LENGTH, "Scene uniform is too large.");
 		return -1;
@@ -16,6 +16,7 @@ int ct_program_setup(ct_program_t *program)
 	}
 	#endif
 
+	// Vulkan base:
 	strcpy(program->vulkan.name, "Contour Tree");
 	program->vulkan.window_resizable = 1;
 	program->vulkan.minimum_window_width = 1080;
@@ -26,6 +27,7 @@ int ct_program_setup(ct_program_t *program)
 		return -1;
 	}
 
+	// Command buffer:
 	strcpy(program->command_buffer.name, "CT command buffer");
 	program->command_buffer.queue = &(program->vulkan.graphics_queue);
 	if (vka_create_command_buffer(&(program->vulkan), &(program->command_buffer)))
@@ -34,11 +36,99 @@ int ct_program_setup(ct_program_t *program)
 		return -1;
 	}
 
+	// Scene uniform:
+	program->update_scene_uniform = 1;
+	glm_mat4_identity(program->scene_uniform.model);
+	glm_mat4_identity(program->scene_uniform.view);
+	program->scene_uniform.isovalue = 1.f; // Isovalues are normalised between 0 and 1.
+
+	strcpy(program->scene_uniform_allocation.name, "CT scene uniform allocation");
+	program->scene_uniform_allocation.properties[0] = VKA_MEMORY_DEVICE;
+
+	strcpy(program->scene_uniform_buffer.name, "CT scene uniform buffer");
+	program->scene_uniform_buffer.allocation = &(program->scene_uniform_allocation);
+	program->scene_uniform_buffer.data = &(program->scene_uniform);
+	program->scene_uniform_buffer.usage = VKA_BUFFER_USAGE_UNIFORM;
+	program->scene_uniform_buffer.size = sizeof(ct_scene_uniform_t);
+	if (vka_create_buffer(&(program->vulkan), &(program->scene_uniform_buffer)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+	if (vka_get_buffer_requirements(&(program->vulkan), &(program->scene_uniform_buffer)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+	if (vka_create_allocation(&(program->vulkan), &(program->scene_uniform_allocation)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+	if (vka_bind_buffer_memory(&(program->vulkan), &(program->scene_uniform_buffer)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+
+	// Descriptor pool and sets:
+	strcpy(program->scene_uniform_descriptor_set.name, "CT scene uniform descriptor set");
+	program->scene_uniform_descriptor_set.data = malloc(1 * sizeof(void *));
+	if (!program->scene_uniform_descriptor_set.data)
+	{
+		snprintf(program->error, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for scene uniform descriptor data.");
+		return -1;
+	}
+	program->scene_uniform_descriptor_set.data[0] = &(program->scene_uniform_buffer);
+	program->scene_uniform_descriptor_set.pool = &(program->descriptor_pool);
+	program->scene_uniform_descriptor_set.binding		= 0;
+	program->scene_uniform_descriptor_set.count		= 1;
+	program->scene_uniform_descriptor_set.type		= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	program->scene_uniform_descriptor_set.stage_flags	= VK_SHADER_STAGE_ALL_GRAPHICS;
+	if (vka_create_descriptor_set_layout(&(program->vulkan),
+		&(program->scene_uniform_descriptor_set)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+
+	strcpy(program->descriptor_pool.name, "CT descriptor pool");
+	if (vka_create_descriptor_pool(&(program->vulkan), &(program->descriptor_pool)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+
+	if (vka_allocate_descriptor_set(&(program->vulkan),
+		&(program->scene_uniform_descriptor_set)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+
+	if (vka_update_descriptor_set(&(program->vulkan), &(program->scene_uniform_descriptor_set)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
+
+	// Pipelines:
 	strcpy(program->mesh_pipeline.name, "CT mesh pipeline");
 	strcpy(program->mesh_pipeline.shaders[VKA_SHADER_TYPE_VERTEX].path,
 						"Shaders/Mesh.vert.sprv");
 	strcpy(program->mesh_pipeline.shaders[VKA_SHADER_TYPE_FRAGMENT].path,
 						"Shaders/Mesh.frag.sprv");
+	program->mesh_pipeline.num_descriptor_sets = 1;
+	program->mesh_pipeline.descriptor_sets = malloc(program->mesh_pipeline.num_descriptor_sets *
+								sizeof(vka_descriptor_set_t *));
+	if (!program->mesh_pipeline.descriptor_sets)
+	{
+		snprintf(program->error, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for mesh pipeline descriptor sets.");
+		return -1;
+	}
+	program->mesh_pipeline.descriptor_sets[0] = &(program->scene_uniform_descriptor_set);
 	program->mesh_pipeline.num_vertex_bindings = 3;
 	program->mesh_pipeline.strides[0] = sizeof(ct_vertex_t);
 	program->mesh_pipeline.strides[1] = sizeof(ct_normal_t);
@@ -77,7 +167,14 @@ void ct_program_shutdown(ct_program_t *program)
 {
 	ct_program_object_shutdown(program); // Also calls device_wait_idle.
 
+	vka_destroy_buffer(&(program->vulkan), &(program->scene_uniform_buffer));
+	vka_destroy_allocation(&(program->vulkan), &(program->scene_uniform_allocation));
+
 	vka_destroy_pipeline(&(program->vulkan), &(program->mesh_pipeline));
+
+	vka_destroy_descriptor_set(&(program->vulkan), &(program->scene_uniform_descriptor_set));
+
+	vka_destroy_descriptor_pool(&(program->vulkan), &(program->descriptor_pool));
 	vka_destroy_command_buffer(&(program->vulkan), &(program->command_buffer));
 	vka_shutdown_vulkan(&(program->vulkan));
 }
@@ -92,27 +189,28 @@ int ct_program_object_setup(ct_program_t *program)
 	// Destroy all objects first (file dialogue will be possible in the future):
 	ct_program_object_shutdown(program);
 
-	// Load mesh and scalar values:
+	// Load mesh:
 	if (!program->scalar_function) { program->scalar_function = ct_tree_scalar_function_y; }
 	if (ct_mesh_load(&(program->mesh), program->error)) { goto error; }
+
+	#ifdef CT_DEBUG
+	ct_mesh_print_short(stdout, &(program->mesh));
+	#endif
+
+	if (!program->mesh.is_manifold)
+	{
+		snprintf(program->error, NM_MAX_ERROR_LENGTH, "Mesh \"%s\" is not manifold.",
+									program->mesh.name);
+		goto error;
+	}
+
+	// Get scalar values:
 	if (program->scalar_function(&(program->join_tree), &(program->mesh), program->error))
 	{
 		goto error;
 	}
 	if (ct_tree_copy_nodes(&(program->join_tree), &(program->split_tree), program->error))
 	{
-		goto error;
-	}
-
-	#ifdef CT_DEBUG
-	ct_mesh_print_short(stdout, &(program->mesh));
-	#endif
-
-	// Check if mesh is manifold:
-	if (!program->mesh.is_manifold)
-	{
-		snprintf(program->error, NM_MAX_ERROR_LENGTH, "Mesh \"%s\" is not manifold.",
-									program->mesh.name);
 		goto error;
 	}
 
@@ -146,7 +244,7 @@ int ct_program_object_setup(ct_program_t *program)
 	if (ct_contour_tree_construct(&(program->contour_tree), &(program->join_tree),
 					&(program->split_tree), program->error))
 	{
-		return -1;
+		goto error;
 	}
 
 	#ifdef CT_DEBUG
@@ -156,7 +254,7 @@ int ct_program_object_setup(ct_program_t *program)
 	ct_tree_print_short(stdout, &(program->contour_tree));
 	#endif
 
-	// Create temporary GPU-ready mesh:
+	// Create temporary GPU-ready mesh and reorganise scalar values:
 	strcpy(gpu_mesh.name, program->mesh.name);
 	if (ct_mesh_prepare_for_gpu(&(program->mesh), &gpu_mesh, program->error)) { goto error; }
 
@@ -165,7 +263,6 @@ int ct_program_object_setup(ct_program_t *program)
 	ct_mesh_gpu_ready_print_short(stdout, &gpu_mesh);
 	#endif
 
-	// Assign scalar values to mesh:
 	scalars = malloc(gpu_mesh.num_vertices * sizeof(float));
 	if (!scalars)
 	{
@@ -182,10 +279,34 @@ int ct_program_object_setup(ct_program_t *program)
 	{
 		scalar_index = gpu_mesh.original_index[i];
 		scalar_index = program->join_tree.nodes[scalar_index].vertex_to_node;
-		scalars[i] = program->join_tree.nodes[scalar_index].value;
-		scalars[i] += offset;
-		scalars[i] /= divide_by;
+		scalars[i] = (program->join_tree.nodes[scalar_index].value + offset) / divide_by;
 	}
+
+	// Get mesh sizes for better camera positioning:
+	float limits[6];
+	limits[0] = limits[1] = gpu_mesh.vertices[0].x;
+	limits[2] = limits[3] = gpu_mesh.vertices[0].y;
+	limits[4] = limits[5] = gpu_mesh.vertices[0].z;
+	for (uint32_t i = 0; i < gpu_mesh.num_vertices; i++)
+	{
+		if (gpu_mesh.vertices[i].x < limits[0]) { limits[0] = gpu_mesh.vertices[i].x; }
+		if (gpu_mesh.vertices[i].x > limits[1]) { limits[1] = gpu_mesh.vertices[i].x; }
+		if (gpu_mesh.vertices[i].y < limits[2]) { limits[2] = gpu_mesh.vertices[i].y; }
+		if (gpu_mesh.vertices[i].y > limits[3]) { limits[3] = gpu_mesh.vertices[i].y; }
+		if (gpu_mesh.vertices[i].z < limits[4]) { limits[4] = gpu_mesh.vertices[i].z; }
+		if (gpu_mesh.vertices[i].z > limits[5]) { limits[5] = gpu_mesh.vertices[i].z; }
+	}
+
+	program->mesh_centre[0] = (limits[0] + limits[1]) / 2.f;
+	program->mesh_centre[1] = (limits[2] + limits[3]) / 2.f;
+	program->mesh_centre[2] = (limits[4] + limits[5]) / 2.f;
+
+	program->rotate_speed = 0.025f;
+	program->translate_speed = (limits[0] - limits[1]) / 2.f;
+	if (program->translate_speed < 0.f) { program->translate_speed *= -1.f; }
+	if (program->translate_speed == 0.f) { program->translate_speed = 0.01f; }
+
+	glm_translate(program->scene_uniform.model, program->mesh_centre);
 
 	// Create mesh allocation and index/vertex buffers:
 	strcpy(program->buffer_allocation.name, "CT mesh allocation");
@@ -225,7 +346,7 @@ int ct_program_object_setup(ct_program_t *program)
 		if (vka_bind_buffer_memory(&(program->vulkan), buffers[i])) { goto error; }
 	}
 
-	// Create staging buffer for GPU upload (largest size will be needed for mesh):
+	// Create staging buffer for GPU upload (largest size will be needed for mesh data):
 	strcpy(staging_allocation.name, "Staging allocation");
 	staging_allocation.properties[0] = VKA_MEMORY_HOST;
 
@@ -300,6 +421,56 @@ void ct_program_object_shutdown(ct_program_t *program)
 	ct_mesh_free(&(program->mesh));
 }
 
+void ct_program_process_input(ct_program_t *program)
+{
+	const bool *keyboard_state = SDL_GetKeyboardState(NULL);
+
+	int changed = 0;
+	static float translate_z = 0.f;
+	static float rotate_y = 0.f;
+	vec3 axis = { 0.f, 1.f, 0.f };
+
+	if (keyboard_state[SDL_SCANCODE_SPACE])
+	{
+		translate_z = 0.f;
+		rotate_y = 0.f;
+		changed = 1;
+	}
+	else if (keyboard_state[SDL_SCANCODE_RIGHT])
+	{
+		rotate_y += program->rotate_speed;
+		while (rotate_y > 360.f) { rotate_y -= 360.f; }
+		changed = 1;
+	}
+	else if (keyboard_state[SDL_SCANCODE_LEFT])
+	{
+		rotate_y -= program->rotate_speed;
+		while (rotate_y < -360.f) { rotate_y += 360.f; }
+		changed = 1;
+	}
+	else if (keyboard_state[SDL_SCANCODE_UP])
+	{
+		translate_z += program->translate_speed;
+		if (translate_z > 10000.f) { translate_z = 10000.f; }
+		changed = 1;
+	}
+	else if (keyboard_state[SDL_SCANCODE_DOWN])
+	{
+		translate_z -= program->translate_speed;
+		if (translate_z < -10000.f) { translate_z = -10000.f; }
+		changed = 1;
+	}
+
+	if (changed)
+	{
+		glm_mat4_identity(program->scene_uniform.model);
+		glm_translate(program->scene_uniform.model, program->mesh_centre);
+		glm_translate_z(program->scene_uniform.model, translate_z);
+		glm_rotate_at(program->scene_uniform.model, program->mesh_centre, rotate_y, axis);
+		program->update_scene_uniform = 1;
+	}
+}
+
 void ct_program_update_window_size(ct_program_t *program)
 {
 	// Update render info with new swapchain extent:
@@ -308,17 +479,35 @@ void ct_program_update_window_size(ct_program_t *program)
 	program->render_info.render_target_height = program->vulkan.swapchain_extent.height;
 	program->render_info.scissor_area.extent.width = program->vulkan.swapchain_extent.width;
 	program->render_info.scissor_area.extent.height = program->vulkan.swapchain_extent.height;
+
+	// Update projection matrix:
+	glm_perspective(1.f, (program->vulkan.swapchain_extent.width * 1.f) /
+		(program->vulkan.swapchain_extent.height * 1.f), CT_CLIP_NEAR, CT_CLIP_FAR,
+		program->scene_uniform.projection);
+	program->update_scene_uniform = 1;
 }
 
 int ct_program_start_frame(ct_program_t *program)
 {
-	if (vka_get_next_swapchain_image(&(program->vulkan))) { return -1; }
+	if (vka_get_next_swapchain_image(&(program->vulkan)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
 	if (program->vulkan.recreate_swapchain)
 	{
-		if (vka_create_swapchain(&(program->vulkan))) { return -1; }
+		if (vka_create_swapchain(&(program->vulkan)))
+		{
+			strcpy(program->error, program->vulkan.error);
+			return -1;
+		}
 		program->vulkan.recreate_swapchain = 0;
 		ct_program_update_window_size(program);
-		if (vka_get_next_swapchain_image(&(program->vulkan))) { return -1; }
+		if (vka_get_next_swapchain_image(&(program->vulkan)))
+		{
+			strcpy(program->error, program->vulkan.error);
+			return -1;
+		}
 	}
 	if (program->vulkan.recreate_pipelines)
 	{
@@ -326,6 +515,7 @@ int ct_program_start_frame(ct_program_t *program)
 
 		if (vka_create_pipeline(&(program->vulkan), &(program->mesh_pipeline)))
 		{
+			strcpy(program->error, program->vulkan.error);
 			return -1;
 		}
 
@@ -344,7 +534,15 @@ int ct_program_render(ct_program_t *program)
 	if (vka_begin_command_buffer(&(program->vulkan),
 		&(program->vulkan.command_buffers[program->vulkan.current_frame])))
 	{
+		strcpy(program->error, program->vulkan.error);
 		return -1;
+	}
+
+	if (program->update_scene_uniform)
+	{
+		vka_update_buffer(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
+								&(program->scene_uniform_buffer));
+		program->update_scene_uniform = 0;
 	}
 
 	program->render_info.colour_image = &(program->vulkan.swapchain_images[
@@ -363,6 +561,9 @@ int ct_program_render(ct_program_t *program)
 	vka_bind_pipeline(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 								&(program->mesh_pipeline));
 
+	vka_bind_descriptor_sets(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
+									&(program->mesh_pipeline));
+
 	vka_bind_vertex_buffers(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 					&(program->index_buffer), 3, program->vertex_buffers);
 
@@ -375,16 +576,22 @@ int ct_program_render(ct_program_t *program)
 	if (vka_end_command_buffer(&(program->vulkan),
 		&(program->vulkan.command_buffers[program->vulkan.current_frame])))
 	{
+		strcpy(program->error, program->vulkan.error);
 		return -1;
 	}
 
 	if (vka_submit_command_buffer(&(program->vulkan),
 		&(program->vulkan.command_buffers[program->vulkan.current_frame])) != VK_SUCCESS)
 	{
+		strcpy(program->error, program->vulkan.error);
 		return -1;
 	}
 
-	if (vka_present_image(&(program->vulkan))) { return -1; }
+	if (vka_present_image(&(program->vulkan)))
+	{
+		strcpy(program->error, program->vulkan.error);
+		return -1;
+	}
 	vka_next_frame(&(program->vulkan));
 
 	return 0;

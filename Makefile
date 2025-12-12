@@ -30,7 +30,7 @@ OUT	:= -o Computational-Topology
 MAIN	:= Computational-Topology.c
 DEPS	:= $(DEPS_PROJECT) $(DEPS_INCLUDE)
 CFLAGS	:= -I Include -fopenmp
-LFLAGS	:= -L Libs -Wl,-rpath '$$ORIGIN/Libs' -lSDL3
+LFLAGS	:= -L Libs -Wl,-rpath '$$ORIGIN/Libs' -lSDL3 -lm
 DEFINES	:=
 DEBUG	:= -D CT_DEBUG -D VKA_DEBUG -g -O0
 
