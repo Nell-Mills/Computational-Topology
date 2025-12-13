@@ -40,7 +40,6 @@ int ct_program_setup(ct_program_t *program)
 	program->update_scene_uniform = 1;
 	glm_mat4_identity(program->scene_uniform.model);
 	glm_mat4_identity(program->scene_uniform.view);
-	program->scene_uniform.isovalue = 1.f; // Isovalues are normalised between 0 and 1.
 
 	strcpy(program->scene_uniform_allocation.name, "CT scene uniform allocation");
 	program->scene_uniform_allocation.properties[0] = VKA_MEMORY_DEVICE;
@@ -183,6 +182,7 @@ int ct_program_object_setup(ct_program_t *program)
 {
 	ct_mesh_gpu_ready_t gpu_mesh = {0};
 	float *scalars = NULL;
+	uint32_t *vertex_to_node = NULL;
 	vka_allocation_t staging_allocation = {0};
 	vka_buffer_t staging_buffer = {0};
 
@@ -190,7 +190,8 @@ int ct_program_object_setup(ct_program_t *program)
 	ct_program_object_shutdown(program);
 
 	// Load mesh:
-	if (!program->scalar_function) { program->scalar_function = ct_tree_scalar_function_y; }
+	//if (!program->scalar_function) { program->scalar_function = ct_tree_scalar_function_y; }
+	if (!program->scalar_function) { program->scalar_function = ct_tree_scalar_function_z; }
 	if (ct_mesh_load(&(program->mesh), program->error)) { goto error; }
 
 	#ifdef CT_DEBUG
@@ -264,23 +265,30 @@ int ct_program_object_setup(ct_program_t *program)
 	#endif
 
 	scalars = malloc(gpu_mesh.num_vertices * sizeof(float));
-	if (!scalars)
+	vertex_to_node = malloc(program->join_tree.num_nodes * sizeof(uint32_t));
+	if (!scalars || !vertex_to_node)
 	{
 		snprintf(program->error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for GPU mesh \"%s\" scalar values.",
 			gpu_mesh.name);
 		goto error;
 	}
-	float offset = -(program->join_tree.nodes[0].value);
-	float divide_by = program->join_tree.nodes[program->join_tree.num_nodes - 1].value -
-							program->join_tree.nodes[0].value;
-	uint32_t scalar_index;
+	for (uint32_t i = 0; i < program->join_tree.num_nodes; i++)
+	{
+		vertex_to_node[program->join_tree.nodes[i].vertex] = i;
+	}
 	for (uint32_t i = 0; i < gpu_mesh.num_vertices; i++)
 	{
-		scalar_index = gpu_mesh.original_index[i];
-		scalar_index = program->join_tree.nodes[scalar_index].vertex_to_node;
-		scalars[i] = (program->join_tree.nodes[scalar_index].value + offset) / divide_by;
+		scalars[i] = program->join_tree.nodes[vertex_to_node[
+				gpu_mesh.original_index[i]]].value;
 	}
+
+	program->scene_uniform.max_value = program->join_tree.nodes[
+			program->join_tree.num_nodes - 1].value;
+	program->scene_uniform.min_value = program->join_tree.nodes[0].value;
+	program->scene_uniform.isovalue = program->scene_uniform.max_value;
+	program->scene_uniform.highlight_size = (program->scene_uniform.max_value -
+					program->scene_uniform.min_value) * 0.015f;
 
 	// Get mesh sizes for better camera positioning:
 	float limits[6];
@@ -297,15 +305,16 @@ int ct_program_object_setup(ct_program_t *program)
 		if (gpu_mesh.vertices[i].z > limits[5]) { limits[5] = gpu_mesh.vertices[i].z; }
 	}
 
-	program->mesh_centre[0] = (limits[0] + limits[1]) / 2.f;
-	program->mesh_centre[1] = (limits[2] + limits[3]) / 2.f;
-	program->mesh_centre[2] = (limits[4] + limits[5]) / 2.f;
+	program->mesh_centre[0] = -(limits[0] + limits[1]) / 2.f;
+	program->mesh_centre[1] = -(limits[2] + limits[3]) / 2.f;
+	program->mesh_centre[2] = -(limits[4] + limits[5]) / 2.f;
 
 	program->rotate_speed = 0.025f;
 	program->translate_speed = (limits[0] - limits[1]) / 2.f;
 	if (program->translate_speed < 0.f) { program->translate_speed *= -1.f; }
 	if (program->translate_speed == 0.f) { program->translate_speed = 0.01f; }
 
+	glm_translate_z(program->scene_uniform.view, -(2.5f * limits[5]));
 	glm_translate(program->scene_uniform.model, program->mesh_centre);
 
 	// Create mesh allocation and index/vertex buffers:
@@ -387,9 +396,14 @@ int ct_program_object_setup(ct_program_t *program)
 		}
 	}
 
+
+
+	// Upload tree data to buffers:
+
 	// Cleanup, success:
 	vka_destroy_buffer(&(program->vulkan), &staging_buffer);
 	vka_destroy_allocation(&(program->vulkan), &staging_allocation);
+	free(vertex_to_node);
 	free(scalars);
 	ct_mesh_gpu_ready_free(&gpu_mesh);
 	return 0;
@@ -399,6 +413,7 @@ int ct_program_object_setup(ct_program_t *program)
 	if (strcmp(program->vulkan.error, "")) { strcpy(program->error, program->vulkan.error); }
 	vka_destroy_buffer(&(program->vulkan), &staging_buffer);
 	vka_destroy_allocation(&(program->vulkan), &staging_allocation);
+	if (vertex_to_node) { free(vertex_to_node); }
 	if (scalars) { free(scalars); }
 	ct_mesh_gpu_ready_free(&gpu_mesh);
 	return -1;
@@ -464,9 +479,9 @@ void ct_program_process_input(ct_program_t *program)
 	if (changed)
 	{
 		glm_mat4_identity(program->scene_uniform.model);
-		glm_translate(program->scene_uniform.model, program->mesh_centre);
 		glm_translate_z(program->scene_uniform.model, translate_z);
-		glm_rotate_at(program->scene_uniform.model, program->mesh_centre, rotate_y, axis);
+		glm_rotate(program->scene_uniform.model, rotate_y, axis);
+		glm_translate(program->scene_uniform.model, program->mesh_centre);
 		program->update_scene_uniform = 1;
 	}
 }

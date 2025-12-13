@@ -20,6 +20,12 @@ typedef struct
 	mat4 view;
 	mat4 projection;
 	float isovalue;
+	float max_value;
+	float min_value;
+	int discard_above;
+	int discard_below;
+	int highlight_equal;
+	float highlight_size;
 } ct_scene_uniform_t;
 
 typedef struct
@@ -32,7 +38,7 @@ typedef struct
 
 	float translate_speed;
 	float rotate_speed;
-	vec3 mesh_centre;
+	vec3 mesh_centre; // Actually negative mesh centre.
 	uint8_t update_scene_uniform;
 
 	ct_scene_uniform_t scene_uniform;

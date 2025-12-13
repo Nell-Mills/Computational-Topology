@@ -13,10 +13,9 @@
 typedef struct
 {
 	float value;
-	uint32_t node_to_vertex;
-	uint32_t vertex_to_node;
+	uint32_t vertex;
 	uint32_t degree[2];	// Up[0], down[1].
-	uint32_t first_arc;	// Arcs array references connected nodes; up, then down.
+	uint32_t first_arc[2];
 } ct_tree_node_t;
 
 typedef struct
@@ -43,7 +42,6 @@ typedef struct
 void ct_tree_free(ct_tree_t *tree);
 int ct_tree_node_is_critical(ct_tree_node_t *node);
 int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to, char error[NM_MAX_ERROR_LENGTH]);
-void ct_tree_sort_nodes(ct_tree_t *tree);
 int ct_tree_nodes_qsort_compare(const void *a, const void *b);
 
 // Tree construction:
