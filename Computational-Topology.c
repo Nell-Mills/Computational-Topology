@@ -78,6 +78,7 @@ typedef struct
 	ct_tree_t split_tree;
 	ct_tree_t contour_tree;
 
+	int tree_display;
 	float translate_speed;
 	float rotate_speed;
 	vec3 mesh_centre; // Actually negative mesh centre.
@@ -99,7 +100,8 @@ int ct_program_upload_object_data(ct_program_t *program, ct_mesh_gpu_ready_t *gp
 int ct_program_upload_helper(ct_program_t *program, vka_allocation_t *staging_allocation,
 		vka_buffer_t *staging_buffer, vka_buffer_t *destination, uint8_t *data);
 
-void ct_program_process_input(ct_program_t *program);
+void ct_program_process_input(ct_program_t *program, SDL_Event *event);
+void ct_program_poll_movement_keys(ct_program_t *program);
 void ct_program_update_window_size(ct_program_t *program);
 int ct_program_start_frame(ct_program_t *program);
 int ct_program_render(ct_program_t *program);
@@ -127,9 +129,13 @@ int main(int argc, char **argv)
 		while (SDL_PollEvent(&event) != 0)
 		{
 			if (event.type == SDL_EVENT_QUIT) { running = 0; }
+			else if (event.type == SDL_EVENT_KEY_DOWN)
+			{
+				ct_program_process_input(&program, &event);
+			}
 		}
 
-		ct_program_process_input(&program);
+		ct_program_poll_movement_keys(&program);
 		if (ct_program_start_frame(&program)) { break; }
 		if (ct_program_render(&program)) { break; }
 	}
@@ -560,11 +566,13 @@ int ct_program_object_setup(ct_program_t *program)
 	if (ct_merge_tree_construct(&(program->join_tree), &(program->mesh),
 			program->join_tree.num_nodes - 1, program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 	if (ct_merge_tree_construct(&(program->split_tree), &(program->mesh),
 							0, program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 	#ifdef CT_DEBUG
@@ -583,6 +591,7 @@ int ct_program_object_setup(ct_program_t *program)
 	if (ct_merge_trees_reduce_to_critical(&(program->join_tree), &(program->split_tree),
 									program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 
@@ -597,12 +606,12 @@ int ct_program_object_setup(ct_program_t *program)
 	fprintf(stdout, "**********************\n");
 	ct_tree_print_short(stdout, &(program->split_tree));
 	#endif
-	//return -1;
 
 	// Construct contour tree:
 	if (ct_contour_tree_construct(&(program->contour_tree), &(program->join_tree),
 					&(program->split_tree), program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 
@@ -611,6 +620,7 @@ int ct_program_object_setup(ct_program_t *program)
 	fprintf(stdout, "* Contour tree *\n");
 	fprintf(stdout, "****************\n");
 	ct_tree_print_short(stdout, &(program->contour_tree));
+	fprintf(stdout, "\n");
 	#endif
 
 	// TODO - undo-redo stack, then you can spin these back using that:
@@ -619,20 +629,24 @@ int ct_program_object_setup(ct_program_t *program)
 	ct_tree_free(&(program->split_tree));
 	if (program->scalar_function(&(program->join_tree), &(program->mesh), program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 	if (ct_tree_copy_nodes(&(program->join_tree), &(program->split_tree), program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 	if (ct_merge_tree_construct(&(program->join_tree), &(program->mesh),
 			program->join_tree.num_nodes - 1, program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 	if (ct_merge_tree_construct(&(program->split_tree), &(program->mesh),
 							0, program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 
@@ -640,13 +654,26 @@ int ct_program_object_setup(ct_program_t *program)
 	if (ct_merge_trees_reduce_to_critical(&(program->join_tree), &(program->split_tree),
 									program->error))
 	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
 		return -1;
 	}
 
 	// Set up object buffers:
-	if (ct_program_create_object_buffers(program, &gpu_mesh)) { return -1; }
-	if (ct_program_create_object_allocations(program)) { return -1; }
-	if (ct_program_upload_object_data(program, &gpu_mesh)) { return -1; }
+	if (ct_program_create_object_buffers(program, &gpu_mesh))
+	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
+		return -1;
+	}
+	if (ct_program_create_object_allocations(program))
+	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
+		return -1;
+	}
+	if (ct_program_upload_object_data(program, &gpu_mesh))
+	{
+		ct_mesh_gpu_ready_free(&gpu_mesh);
+		return -1;
+	}
 
 	ct_mesh_gpu_ready_free(&gpu_mesh);
 	return 0;
@@ -1016,8 +1043,10 @@ int ct_program_upload_object_data(ct_program_t *program, ct_mesh_gpu_ready_t *gp
 
 	free(types);
 
-	// Allocate memory for arc index data:
-	uint32_t *arc_endpoints = malloc(program->contour_tree.num_arcs * 2 * sizeof(uint32_t));
+	// Allocate memory for arc index data (account for mixture of tree sizes):
+	uint32_t num_arcs = program->contour_tree.num_arcs * 2;
+	if (program->join_tree.num_arcs > num_arcs) { num_arcs = program->join_tree.num_arcs; }
+	uint32_t *arc_endpoints = malloc(num_arcs * sizeof(uint32_t));
 	if (!arc_endpoints)
 	{
 		snprintf(program->error, NM_MAX_ERROR_LENGTH,
@@ -1137,7 +1166,19 @@ int ct_program_upload_helper(ct_program_t *program, vka_allocation_t *staging_al
 	return 0;
 }
 
-void ct_program_process_input(ct_program_t *program)
+void ct_program_process_input(ct_program_t *program, SDL_Event *event)
+{
+	if (event->key.key == SDLK_TAB)
+	{
+		program->tree_display = (program->tree_display + 1) % 3;
+		printf("Now displaying: ");
+		if (program->tree_display == 1) { printf("Join tree.\n"); }
+		else if (program->tree_display == 2) { printf("Split tree.\n"); }
+		else { printf("Contour tree.\n"); }
+	}
+}
+
+void ct_program_poll_movement_keys(ct_program_t *program)
 {
 	const bool *keyboard_state = SDL_GetKeyboardState(NULL);
 
@@ -1280,29 +1321,52 @@ int ct_program_render(ct_program_t *program)
 	vka_buffer_t vertex_buffers[2];
 	vertex_buffers[0].buffer = program->node_buffer_positions_scalars.buffer;
 	vertex_buffers[1].buffer = program->mesh_buffer_normals.buffer;
+
+	// Mesh:
 	vka_bind_vertex_buffers(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 						&(program->mesh_buffer_index), 2, vertex_buffers);
 
 	vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 							program->mesh.num_faces * 3, 0, 0);
 
+	// Nodes:
 	vka_bind_pipeline(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 								&(program->node_pipeline));
 	vka_bind_vertex_buffers(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 						&(program->node_buffer_index), 1, vertex_buffers);
 	vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
-						program->join_tree.num_nodes, 0, 0);
+						program->contour_tree.num_nodes, 0, 0);
 
+	// Arcs:
 	vka_bind_pipeline(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 								&(program->arc_pipeline));
-//	vka_bind_vertex_buffers(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
-//					&(program->join_arc_buffer), 1, vertex_buffers);
-//	vka_bind_vertex_buffers(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
-//					&(program->split_arc_buffer), 1, vertex_buffers);
-	vka_bind_vertex_buffers(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
-					&(program->contour_arc_buffer), 1, vertex_buffers);
-	vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
-						program->join_tree.num_arcs * 2, 0, 0);
+	if (program->tree_display == 1)
+	{
+		// Join tree:
+		vka_bind_vertex_buffers(&(program->vulkan.command_buffers[
+			program->vulkan.current_frame]), &(program->join_arc_buffer),
+			1, vertex_buffers);
+		vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
+							program->join_tree.num_arcs * 2, 0, 0);
+	}
+	else if (program->tree_display == 2)
+	{
+		// Split tree:
+		vka_bind_vertex_buffers(&(program->vulkan.command_buffers[
+			program->vulkan.current_frame]), &(program->split_arc_buffer),
+			1, vertex_buffers);
+		vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
+							program->split_tree.num_arcs * 2, 0, 0);
+	}
+	else
+	{
+		// Contour tree:
+		vka_bind_vertex_buffers(&(program->vulkan.command_buffers[
+			program->vulkan.current_frame]), &(program->contour_arc_buffer),
+			1, vertex_buffers);
+		vka_draw_indexed(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
+							program->contour_tree.num_arcs * 2, 0, 0);
+	}
 
 	vka_end_rendering(&(program->vulkan.command_buffers[program->vulkan.current_frame]),
 								&(program->render_info));

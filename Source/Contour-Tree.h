@@ -59,6 +59,7 @@ int ct_merge_trees_reduce_to_critical(ct_tree_t *join_tree, ct_tree_t *split_tre
 						char error[NM_MAX_ERROR_LENGTH]);
 int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	ct_tree_t *split_tree, char error[NM_MAX_ERROR_LENGTH]);
+void ct_tree_remove_node(ct_tree_t *tree, uint32_t node);
 
 int ct_index_compare_join(uint32_t left, uint32_t right);
 int ct_index_compare_split(uint32_t left, uint32_t right);

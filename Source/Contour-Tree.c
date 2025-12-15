@@ -513,8 +513,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	// Merge join and split trees:
 	uint32_t leaf;
 	uint32_t node;
-	uint32_t higher_node;
-	uint32_t lower_node;
 	while (num_leaves > 1)
 	{
 		leaf = leaf_queue[first_leaf];
@@ -527,9 +525,9 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 			continue;
 		}
 
+		// Add arc to contour tree:
 		if (!join_tree->nodes[leaf].degree[0]) // Upper leaf.
 		{
-			// Add arc to contour tree:
 			node = join_tree->arcs[join_tree->nodes[leaf].first_arc[1]];
 
 			contour_tree->arcs[contour_tree->nodes[leaf].first_arc[1] +
@@ -541,43 +539,9 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 			contour_tree->nodes[node].degree[0]++;
 
 			contour_tree->num_arcs++;
-
-			// Remove arc from join tree:
-			for (uint32_t i = join_tree->nodes[node].first_arc[0];
-				i < (join_tree->nodes[node].first_arc[0] +
-				join_tree->nodes[node].degree[0]); i++)
-			{
-				if (join_tree->arcs[i] == leaf)
-				{
-					// Swap with last up arc:
-					join_tree->arcs[i] = join_tree->arcs[
-						join_tree->nodes[node].first_arc[0] +
-						join_tree->nodes[node].degree[0] - 1];
-					break;
-				}
-			}
-			join_tree->nodes[node].degree[0]--;
-
-			// Remove arc from split tree:
-			lower_node = split_tree->arcs[split_tree->nodes[leaf].first_arc[1]];
-			if (split_tree->nodes[leaf].degree[0])
-			{
-				// Join higher node to lower one:
-				higher_node = split_tree->arcs[
-					split_tree->nodes[leaf].first_arc[0]];
-				split_tree->arcs[split_tree->nodes[higher_node].first_arc[1]] =
-										lower_node;
-				split_tree->arcs[split_tree->nodes[lower_node].first_arc[0]] =
-										higher_node;
-			}
-			else if (split_tree->nodes[lower_node].degree[0])
-			{
-				split_tree->nodes[lower_node].degree[0]--;
-			}
 		}
 		else // Lower leaf.
 		{
-			// Add arc to contour tree:
 			node = split_tree->arcs[split_tree->nodes[leaf].first_arc[0]];
 
 			contour_tree->arcs[contour_tree->nodes[leaf].first_arc[0] +
@@ -589,42 +553,11 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 			contour_tree->nodes[node].degree[1]++;
 
 			contour_tree->num_arcs++;
-
-			// Remove arc from split tree:
-			for (uint32_t i = split_tree->nodes[node].first_arc[1];
-				i < (split_tree->nodes[node].first_arc[1] +
-				split_tree->nodes[node].degree[1]); i++)
-			{
-				if (split_tree->arcs[i] == leaf)
-				{
-					// Swap with last down arc:
-					split_tree->arcs[i] = split_tree->arcs[
-						split_tree->nodes[node].first_arc[1] +
-						split_tree->nodes[node].degree[1] - 1];
-					break;
-				}
-			}
-			split_tree->nodes[node].degree[1]--;
-
-			higher_node = join_tree->arcs[join_tree->nodes[leaf].first_arc[0]];
-			if (join_tree->nodes[leaf].degree[1])
-			{
-				// Join lower node to higher one:
-				lower_node = join_tree->arcs[join_tree->nodes[leaf].first_arc[1]];
-				join_tree->arcs[join_tree->nodes[lower_node].first_arc[0]] =
-										higher_node;
-				join_tree->arcs[join_tree->nodes[higher_node].first_arc[1]] =
-										lower_node;
-			}
-			else if (join_tree->nodes[higher_node].degree[1])
-			{
-				join_tree->nodes[higher_node].degree[1]--;
-			}
 		}
 
-		// Nullify leaf:
-		join_tree->nodes[leaf].degree[0] = join_tree->nodes[leaf].degree[1] = 0;
-		split_tree->nodes[leaf].degree[0] = split_tree->nodes[leaf].degree[1] = 0;
+		// Remove leaf from both trees:
+		ct_tree_remove_node(join_tree, leaf);
+		ct_tree_remove_node(split_tree, leaf);
 
 		// Check if connected node is now a leaf:
 		if ((join_tree->nodes[node].degree[0] + split_tree->nodes[node].degree[1]) == 1)
@@ -635,7 +568,118 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	}
 
 	free(leaf_queue);
+
+	if (contour_tree->num_arcs != join_tree->num_arcs)
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH,
+			"Contour tree has incorrect number of arcs. It has %u, and it should "
+			"have %u.", contour_tree->num_arcs, join_tree->num_arcs);
+		return -1;
+	}
+
 	return 0;
+}
+
+void ct_tree_remove_node(ct_tree_t *tree, uint32_t node)
+{
+	if ((tree->nodes[node].degree[0] > 1) ||
+		(tree->nodes[node].degree[1] > 1))
+	{
+		#ifdef CT_DEBUG
+		printf("Trying to remove a saddle: %u\n", node);
+		#endif
+		return;
+	}
+	if (!tree->nodes[node].degree[0] && !tree->nodes[node].degree[1])
+	{
+		#ifdef CT_DEBUG
+		printf("Trying to remove a null node: %u\n", node);
+		#endif
+		return;
+	}
+
+	int direction = -1;
+	if (!tree->nodes[node].degree[1])
+	{
+		// Lower leaf:
+		direction = 0;
+	}
+	else if (!tree->nodes[node].degree[0])
+	{
+		// Upper leaf:
+		direction = 1;
+	}
+
+	if (direction != -1)
+	{
+		// Process leaf node:
+		uint32_t other = tree->arcs[tree->nodes[node].first_arc[direction]];
+		int found = 0;
+		for (uint32_t i = 0; i < tree->nodes[other].degree[!direction]; i++)
+		{
+			if (tree->arcs[tree->nodes[other].first_arc[!direction] + i] == node)
+			{
+				// Swap arc with last one:
+				found = 1;
+				uint32_t arc = tree->arcs[tree->nodes[other].first_arc[!direction] +
+							tree->nodes[other].degree[!direction] - 1];
+				tree->arcs[tree->nodes[other].first_arc[!direction] +
+					tree->nodes[other].degree[!direction] - 1] = node;
+				tree->arcs[tree->nodes[other].first_arc[!direction] + i] = arc;
+				tree->nodes[other].degree[!direction]--;
+				break;
+			}
+		}
+		tree->nodes[node].degree[direction]--;
+		#ifdef CT_DEBUG
+		if (!found)
+		{
+			printf("\nLeaf not attached to anything: %u\n", node);
+			printf("Node:\t%u,\tDegree: (%u, %u)\n", node,
+				tree->nodes[node].degree[0], tree->nodes[node].degree[1]);
+			printf("Other:\t%u,\tDegree: (%u, %u)\n", other,
+				tree->nodes[other].degree[0], tree->nodes[other].degree[1]);
+		}
+		#endif
+	}
+	else
+	{
+		// Process regular node:
+		uint32_t others[4]; // Higher node + arc, lower node + arc.
+		for (int direction = 0; direction < 2; direction++)
+		{
+			uint32_t other = tree->arcs[tree->nodes[node].first_arc[direction]];
+			uint32_t arc;
+			others[direction * 2] = other;
+			int found = 0;
+			for (uint32_t i = 0; i < tree->nodes[other].degree[!direction]; i++)
+			{
+				if (tree->arcs[tree->nodes[other].first_arc[!direction] + i] == node)
+				{
+					found = 1;
+					arc = tree->nodes[other].first_arc[!direction] + i;
+					break;
+				}
+			}
+			if (!found)
+			{
+				#ifdef CT_DEBUG
+				printf("\nNode not attached to anything: %u\n", node);
+				printf("Node:\t%u,\tDegree: (%u, %u)\n", node,
+					tree->nodes[node].degree[0], tree->nodes[node].degree[1]);
+				printf("Other:\t%u,\tDegree: (%u, %u)\n", other,
+					tree->nodes[other].degree[0], tree->nodes[other].degree[1]);
+				#endif
+				return;
+			}
+			others[(direction * 2) + 1] = arc;
+		}
+		// Connect lower and higher nodes:
+		tree->arcs[others[1]] = others[2];
+		tree->arcs[others[3]] = others[0];
+		tree->nodes[node].degree[0]--;
+		tree->nodes[node].degree[1]--;
+	}
 }
 
 int ct_index_compare_join(uint32_t left, uint32_t right)
