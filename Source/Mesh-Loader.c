@@ -117,9 +117,9 @@ int ct_mesh_load_obj(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 	if (!attrib.num_normals) { mesh->normals[0].y = 127; }
 	for (unsigned int i = 0; i < attrib.num_normals; i++)
 	{
-		mesh->normals[i].x = attrib.normals[i * 3] * 127.5;
-		mesh->normals[i].y = attrib.normals[(i * 3) + 1] * 127.5;
-		mesh->normals[i].z = attrib.normals[(i * 3) + 2] * 127.5;
+		mesh->normals[i].x = attrib.normals[i * 3] * 127.5f;
+		mesh->normals[i].y = attrib.normals[(i * 3) + 1] * 127.5f;
+		mesh->normals[i].z = attrib.normals[(i * 3) + 2] * 127.5f;
 	}
 
 	mesh->colours[0].r = mesh->colours[0].g = mesh->colours[0].b = mesh->colours[0].a = 255;
@@ -134,17 +134,17 @@ int ct_mesh_load_obj(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			mesh->faces[i].vertices[j].v = attrib.faces[(i * 3) + j].v_idx;
-			mesh->faces[i].vertices[j].n = 0;
-			mesh->faces[i].vertices[j].c = 0;
-			mesh->faces[i].vertices[j].u = 0;
+			mesh->faces[i][j].v = attrib.faces[(i * 3) + j].v_idx;
+			mesh->faces[i][j].n = 0;
+			mesh->faces[i][j].c = 0;
+			mesh->faces[i][j].u = 0;
 			if (attrib.num_normals > 0)
 			{
-				mesh->faces[i].vertices[j].n = attrib.faces[(i * 3) + j].vn_idx;
+				mesh->faces[i][j].n = attrib.faces[(i * 3) + j].vn_idx;
 			}
 			if (attrib.num_texcoords > 0)
 			{
-				mesh->faces[i].vertices[j].u = attrib.faces[(i * 3) + j].vt_idx;
+				mesh->faces[i][j].u = attrib.faces[(i * 3) + j].vt_idx;
 			}
 		}
 	}
@@ -183,9 +183,9 @@ int ct_mesh_write_obj(FILE *file, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGT
 		fprintf(file, "f");
 		for (int j = 0; j < 3; j++)
 		{
-			fprintf(file, " %u/%u/%u", mesh->faces[i].vertices[j].v + 1,
-						mesh->faces[i].vertices[j].u + 1,
-						mesh->faces[i].vertices[j].n + 1);
+			fprintf(file, " %u/%u/%u", mesh->faces[i][j].v + 1,
+						mesh->faces[i][j].u + 1,
+						mesh->faces[i][j].n + 1);
 		}
 		fprintf(file, "\n");
 	}

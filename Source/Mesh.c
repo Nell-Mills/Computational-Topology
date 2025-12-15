@@ -183,8 +183,8 @@ int ct_mesh_calculate_edges(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			mesh->edges[(i * 3) + j].from = mesh->faces[i].vertices[j].v;
-			mesh->edges[(i * 3) + j].to = mesh->faces[i].vertices[(j + 1) % 3].v;
+			mesh->edges[(i * 3) + j].from = mesh->faces[i][j].v;
+			mesh->edges[(i * 3) + j].to = mesh->faces[i][(j + 1) % 3].v;
 			mesh->edges[(i * 3) + j].next = (i * 3) + ((j + 1) % 3);
 			mesh->edges[(i * 3) + j].other_half = UINT32_MAX;
 
@@ -440,6 +440,9 @@ int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERRO
 
 void ct_mesh_gpu_ready_free(ct_mesh_gpu_ready_t *mesh)
 {
+	char name[NM_MAX_NAME_LENGTH];
+	strcpy(name, mesh->name);
+
 	if (mesh->vertices) { free(mesh->vertices); }
 	if (mesh->normals) { free(mesh->normals); }
 	if (mesh->colours) { free(mesh->colours); }
@@ -447,8 +450,8 @@ void ct_mesh_gpu_ready_free(ct_mesh_gpu_ready_t *mesh)
 	if (mesh->original_index) { free(mesh->original_index); }
 	if (mesh->faces) { free(mesh->faces); }
 
-	// GPU ready meshes are created from regular ones, so reset everything except name:
-	memset(mesh + sizeof(mesh->name), 0, sizeof(*mesh) - sizeof(mesh->name));
+	memset(mesh, 0, sizeof(ct_mesh_gpu_ready_t));
+	strcpy(mesh->name, name);
 }
 
 int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh,
@@ -511,6 +514,69 @@ int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh,
 	return 0;
 }
 
+int ct_mesh_gpu_ready_vertex_normals(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH])
+{
+	// Calculate per-vertex normals (initially floats, for accumulation):
+	ct_vertex_t *normals = malloc(mesh->num_vertices * sizeof(ct_vertex_t));
+	if (!normals)
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for normals for \"%s\".", mesh->name);
+		return -1;
+	}
+	memset(normals, 0, mesh->num_vertices * sizeof(ct_vertex_t));
+	for (uint32_t i = 0; i < mesh->num_faces; i++)
+	{
+		// Get face normal:
+		uint32_t i0 = mesh->faces[i][0];
+		uint32_t i1 = mesh->faces[i][1];
+		uint32_t i2 = mesh->faces[i][2];
+
+		ct_vertex_t v1 = { mesh->vertices[i1].x - mesh->vertices[i0].x,
+				mesh->vertices[i1].y - mesh->vertices[i0].y,
+				mesh->vertices[i1].z - mesh->vertices[i0].z };
+
+		ct_vertex_t v2 = { mesh->vertices[i2].x - mesh->vertices[i0].x,
+				mesh->vertices[i2].y - mesh->vertices[i0].y,
+				mesh->vertices[i2].z - mesh->vertices[i0].z };
+
+		ct_vertex_t normal = { (v1.y * v2.z) - (v1.z * v2.y),
+				(v1.z * v2.x) - (v1.x * v2.z),
+				(v1.x * v2.y) - (v1.y * v2.x) };
+
+		// Accumulate vertex normals:
+		normals[i0].x += normal.x;
+		normals[i0].y += normal.y;
+		normals[i0].z += normal.z;
+		normals[i1].x += normal.x;
+		normals[i1].y += normal.y;
+		normals[i1].z += normal.z;
+		normals[i2].x += normal.x;
+		normals[i2].y += normal.y;
+		normals[i2].z += normal.z;
+	}
+
+	// Normalise normals:
+	for (uint32_t i = 0; i < mesh->num_vertices; i++)
+	{
+		float epsilon = 1e-5f;
+		float divide = sqrtf((normals[i].x * normals[i].x) +
+					(normals[i].y * normals[i].y) +
+					(normals[i].z * normals[i].z));
+		if (divide < epsilon) { divide = epsilon; }
+		normals[i].x /= divide;
+		normals[i].y /= divide;
+		normals[i].z /= divide;
+
+		mesh->normals[i].x = normals[i].x * 127.5f;
+		mesh->normals[i].y = normals[i].y * 127.5f;
+		mesh->normals[i].z = normals[i].z * 127.5f;
+	}
+
+	free(normals);
+	return 0;
+}
+
 int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 					char error[NM_MAX_ERROR_LENGTH])
 {
@@ -533,10 +599,10 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 	{
 		for (int j = 0; j < 3; j++)
 		{
-			face_vertices[(i * 3 * 5) + (j * 5) + 0] = mesh_old->faces[i].vertices[j].v;
-			face_vertices[(i * 3 * 5) + (j * 5) + 1] = mesh_old->faces[i].vertices[j].n;
-			face_vertices[(i * 3 * 5) + (j * 5) + 2] = mesh_old->faces[i].vertices[j].c;
-			face_vertices[(i * 3 * 5) + (j * 5) + 3] = mesh_old->faces[i].vertices[j].u;
+			face_vertices[(i * 3 * 5) + (j * 5) + 0] = mesh_old->faces[i][j].v;
+			face_vertices[(i * 3 * 5) + (j * 5) + 1] = mesh_old->faces[i][j].n;
+			face_vertices[(i * 3 * 5) + (j * 5) + 2] = mesh_old->faces[i][j].c;
+			face_vertices[(i * 3 * 5) + (j * 5) + 3] = mesh_old->faces[i][j].u;
 			face_vertices[(i * 3 * 5) + (j * 5) + 4] = i;
 		}
 	}
@@ -611,10 +677,10 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 		{
 			for (int k = 0; k < 3; k++)
 			{
-				if (mesh_old->faces[face_vertices[j + 4]].vertices[k].v ==
+				if (mesh_old->faces[face_vertices[j + 4]][k].v ==
 							mesh_new->original_index[i])
 				{
-					mesh_new->faces[face_vertices[j + 4]].vertices[k] = i;
+					mesh_new->faces[face_vertices[j + 4]][k] = i;
 				}
 			}
 		}
@@ -730,27 +796,27 @@ void ct_mesh_print(FILE *file, ct_mesh_t *mesh)
 		fprintf(file, "Data for vertices in first face:\n");
 		for (int i = 0; i < 3; i++)
 		{
-			fprintf(file, "Vertex %d:\n", mesh->faces[0].vertices[i].v);
+			fprintf(file, "Vertex %d:\n", mesh->faces[0][i].v);
 			fprintf(file, "--> Position %u: %f, %f, %f\n",
-				mesh->faces[0].vertices[i].v,
-				mesh->vertices[mesh->faces[0].vertices[i].v].x,
-				mesh->vertices[mesh->faces[0].vertices[i].v].y,
-				mesh->vertices[mesh->faces[0].vertices[i].v].z);
+				mesh->faces[0][i].v,
+				mesh->vertices[mesh->faces[0][i].v].x,
+				mesh->vertices[mesh->faces[0][i].v].y,
+				mesh->vertices[mesh->faces[0][i].v].z);
 			fprintf(file, "--> Normal %u: %d, %d, %d\n",
-				mesh->faces[0].vertices[i].n,
-				mesh->normals[mesh->faces[0].vertices[i].n].x,
-				mesh->normals[mesh->faces[0].vertices[i].n].y,
-				mesh->normals[mesh->faces[0].vertices[i].n].z);
+				mesh->faces[0][i].n,
+				mesh->normals[mesh->faces[0][i].n].x,
+				mesh->normals[mesh->faces[0][i].n].y,
+				mesh->normals[mesh->faces[0][i].n].z);
 			fprintf(file, "--> Colour %u: %u, %u, %u, %u\n",
-				mesh->faces[0].vertices[i].c,
-				mesh->colours[mesh->faces[0].vertices[i].c].r,
-				mesh->colours[mesh->faces[0].vertices[i].c].g,
-				mesh->colours[mesh->faces[0].vertices[i].c].b,
-				mesh->colours[mesh->faces[0].vertices[i].c].a);
+				mesh->faces[0][i].c,
+				mesh->colours[mesh->faces[0][i].c].r,
+				mesh->colours[mesh->faces[0][i].c].g,
+				mesh->colours[mesh->faces[0][i].c].b,
+				mesh->colours[mesh->faces[0][i].c].a);
 			fprintf(file, "--> UV coordinates %u: %f, %f\n",
-				mesh->faces[0].vertices[i].u,
-				mesh->uvs[mesh->faces[0].vertices[i].u].u,
-				mesh->uvs[mesh->faces[0].vertices[i].u].v);
+				mesh->faces[0][i].u,
+				mesh->uvs[mesh->faces[0][i].u].u,
+				mesh->uvs[mesh->faces[0][i].u].v);
 			fprintf(file, "--> First edge: %d\n", mesh->first_edge[i]);
 		}
 
@@ -802,24 +868,24 @@ void ct_mesh_gpu_ready_print(FILE *file, ct_mesh_gpu_ready_t *mesh)
 		fprintf(file, "Data for vertices in first face:\n");
 		for (int i = 0; i < 3; i++)
 		{
-			fprintf(file, "Vertex %u (Originally %u):\n", mesh->faces[0].vertices[i],
-					mesh->original_index[mesh->faces[0].vertices[i]]);
+			fprintf(file, "Vertex %u (Originally %u):\n", mesh->faces[0][i],
+					mesh->original_index[mesh->faces[0][i]]);
 			fprintf(file, "--> Position: %f, %f, %f\n",
-				mesh->vertices[mesh->faces[0].vertices[i]].x,
-				mesh->vertices[mesh->faces[0].vertices[i]].y,
-				mesh->vertices[mesh->faces[0].vertices[i]].z);
+				mesh->vertices[mesh->faces[0][i]].x,
+				mesh->vertices[mesh->faces[0][i]].y,
+				mesh->vertices[mesh->faces[0][i]].z);
 			fprintf(file, "--> Normal: %d, %d, %d\n",
-				mesh->normals[mesh->faces[0].vertices[i]].x,
-				mesh->normals[mesh->faces[0].vertices[i]].y,
-				mesh->normals[mesh->faces[0].vertices[i]].z);
+				mesh->normals[mesh->faces[0][i]].x,
+				mesh->normals[mesh->faces[0][i]].y,
+				mesh->normals[mesh->faces[0][i]].z);
 			fprintf(file, "--> Colour: %u, %u, %u, %u\n",
-				mesh->colours[mesh->faces[0].vertices[i]].r,
-				mesh->colours[mesh->faces[0].vertices[i]].g,
-				mesh->colours[mesh->faces[0].vertices[i]].b,
-				mesh->colours[mesh->faces[0].vertices[i]].a);
+				mesh->colours[mesh->faces[0][i]].r,
+				mesh->colours[mesh->faces[0][i]].g,
+				mesh->colours[mesh->faces[0][i]].b,
+				mesh->colours[mesh->faces[0][i]].a);
 			fprintf(file, "--> UV coordinates: %f, %f\n",
-				mesh->uvs[mesh->faces[0].vertices[i]].u,
-				mesh->uvs[mesh->faces[0].vertices[i]].v);
+				mesh->uvs[mesh->faces[0][i]].u,
+				mesh->uvs[mesh->faces[0][i]].v);
 		}
 	}
 }

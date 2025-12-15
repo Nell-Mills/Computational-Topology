@@ -25,10 +25,13 @@ void ct_tree_free(ct_tree_t *tree)
 	}
 }
 
-int ct_tree_node_is_critical(ct_tree_node_t *node)
+int8_t ct_tree_get_node_type(ct_tree_node_t *node)
 {
-	return (!((node->degree[0] == 1) && (node->degree[1] == 1)) &&
-		!((node->degree[0] == 0) && (node->degree[1] == 0)));
+	if (!node->degree[0] && !node->degree[1]) { return CT_NODE_TYPE_DELETED; }
+	if (!node->degree[1]) { return CT_NODE_TYPE_MINIMUM; }
+	if (!node->degree[0]) { return CT_NODE_TYPE_MAXIMUM; }
+	if ((node->degree[0] > 1) || (node->degree[1] > 1)) { return CT_NODE_TYPE_SADDLE; }
+	return CT_NODE_TYPE_REGULAR;
 }
 
 int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to, char error[NM_MAX_ERROR_LENGTH])
@@ -52,7 +55,7 @@ int ct_tree_nodes_qsort_compare(const void *a, const void *b)
 	ct_tree_node_t right = *(ct_tree_node_t *)b;
 
 	if (left.value != right.value) { return ((left.value > right.value) * 2) - 1; }
-	return ((left.vertex > right.vertex) * 2) - 1;
+	return ((left.node_to_vertex > right.node_to_vertex) * 2) - 1;
 }
 
 /*********************
@@ -105,20 +108,6 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 		index_increment = ct_index_increment_join;
 	}
 
-	// Construct mapping of vertex index --> node index:
-	uint32_t *vertex_to_node = malloc(merge_tree->num_nodes * sizeof(uint32_t));
-	if (!vertex_to_node)
-	{
-		snprintf(error, NM_MAX_ERROR_LENGTH,
-			"Could not allocate memory for merge tree vertex-node mapping.");
-		ct_disjoint_set_free(&disjoint_set);
-		return -1;
-	}
-	for (uint32_t i = 0; i < merge_tree->num_nodes; i++)
-	{
-		vertex_to_node[merge_tree->nodes[i].vertex] = i;
-	}
-
 	uint32_t current_arc[2] = { 0, merge_tree->num_nodes - 1 }; // Up[0], down[1].
 	uint32_t current_edge;
 	uint32_t current_vertex;
@@ -130,7 +119,7 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 	while (1)
 	{
 		merge_tree->nodes[i].first_arc[!direction] = current_arc[!direction];
-		current_vertex = merge_tree->nodes[i].vertex;
+		current_vertex = merge_tree->nodes[i].node_to_vertex;
 		current_edge = mesh->first_edge[current_vertex];
 		adjacent_vertex = current_vertex;
 		while (1)
@@ -142,7 +131,7 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 			}
 			else { adjacent_vertex = mesh->edges[current_edge].from; }
 
-			adjacent_node = vertex_to_node[adjacent_vertex];
+			adjacent_node = merge_tree->nodes[adjacent_vertex].vertex_to_node;
 			current_component = ct_disjoint_set_find(i, &disjoint_set);
 			adjacent_component = ct_disjoint_set_find(adjacent_node, &disjoint_set);
 			if ((adjacent_vertex != previous_adjacent_vertex) &&
@@ -178,8 +167,6 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 		}
 		if (!index_increment(&i, index_limit)) { break; }
 	}
-
-	free(vertex_to_node);
 
 	// Get root information:
 	merge_tree->roots = malloc(merge_tree->num_nodes * sizeof(uint32_t));
@@ -265,7 +252,7 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	for (uint32_t i = 0; i < join_tree->num_nodes; i++)
 	{
 		contour_tree->nodes[i].value = join_tree->nodes[i].value;
-		contour_tree->nodes[i].vertex = join_tree->nodes[i].vertex;
+		contour_tree->nodes[i].node_to_vertex = join_tree->nodes[i].node_to_vertex;
 
 		// Degree information will be accumulated during merging.
 
@@ -424,7 +411,6 @@ int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 			}
 			split_tree->nodes[node].degree[1]--;
 
-			// Remove arc from join tree:
 			higher_node = join_tree->arcs[join_tree->nodes[leaf].first_arc[0]];
 			if (join_tree->nodes[leaf].degree[1])
 			{
@@ -485,6 +471,37 @@ int ct_index_increment_split(uint32_t *index, uint32_t limit)
  * Scalar functions *
  ********************/
 
+int ct_tree_scalar_function_x(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
+{
+	if (ct_mesh_check_validity(mesh, error)) { return -1; }
+
+	ct_tree_free(tree);
+	tree->num_nodes = mesh->num_vertices;
+	tree->nodes = malloc(tree->num_nodes * sizeof(ct_tree_node_t));
+	if (!tree->nodes)
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not allocate memory for tree nodes.");
+		return -1;
+	}
+	memset(tree->nodes, 0, tree->num_nodes * sizeof(ct_tree_node_t));
+
+	for (uint32_t i = 0; i < tree->num_nodes; i++)
+	{
+		tree->nodes[i].node_to_vertex = i;
+		tree->nodes[i].value = mesh->vertices[i].x;
+	}
+
+	qsort(tree->nodes, tree->num_nodes, sizeof(tree->nodes[0]), ct_tree_nodes_qsort_compare);
+
+	// Create 2-way mapping between vertices and nodes:
+	for (uint32_t i = 0; i < tree->num_nodes; i++)
+	{
+		tree->nodes[tree->nodes[i].node_to_vertex].vertex_to_node = i;
+	}
+
+	return 0;
+}
+
 int ct_tree_scalar_function_y(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 {
 	if (ct_mesh_check_validity(mesh, error)) { return -1; }
@@ -501,11 +518,17 @@ int ct_tree_scalar_function_y(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MA
 
 	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
-		tree->nodes[i].vertex = i;
+		tree->nodes[i].node_to_vertex = i;
 		tree->nodes[i].value = mesh->vertices[i].y;
 	}
 
 	qsort(tree->nodes, tree->num_nodes, sizeof(tree->nodes[0]), ct_tree_nodes_qsort_compare);
+
+	// Create 2-way mapping between vertices and nodes:
+	for (uint32_t i = 0; i < tree->num_nodes; i++)
+	{
+		tree->nodes[tree->nodes[i].node_to_vertex].vertex_to_node = i;
+	}
 
 	return 0;
 }
@@ -526,11 +549,17 @@ int ct_tree_scalar_function_z(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MA
 
 	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
-		tree->nodes[i].vertex = i;
+		tree->nodes[i].node_to_vertex = i;
 		tree->nodes[i].value = mesh->vertices[i].z;
 	}
 
 	qsort(tree->nodes, tree->num_nodes, sizeof(tree->nodes[0]), ct_tree_nodes_qsort_compare);
+
+	// Create 2-way mapping between vertices and nodes:
+	for (uint32_t i = 0; i < tree->num_nodes; i++)
+	{
+		tree->nodes[tree->nodes[i].node_to_vertex].vertex_to_node = i;
+	}
 
 	return 0;
 }
@@ -637,9 +666,9 @@ void ct_tree_print(FILE *file, ct_tree_t *tree)
 	fprintf(file, ":\n");
 	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
-		if (!ct_tree_node_is_critical(&(tree->nodes[i]))) { continue; }
+		if (ct_tree_get_node_type(&(tree->nodes[i])) == CT_NODE_TYPE_REGULAR) { continue; }
 		fprintf(file, "Node %u: %u -> Up = %u, Down = %u\n", i,
-			tree->nodes[i].vertex, tree->nodes[i].degree[0],
+			tree->nodes[i].node_to_vertex, tree->nodes[i].degree[0],
 			tree->nodes[i].degree[1]);
 	}
 
@@ -655,8 +684,9 @@ void ct_tree_print(FILE *file, ct_tree_t *tree)
 		num_arcs = tree->nodes[i].degree[0];
 		for (uint32_t j = first_arc; j < (first_arc + num_arcs); j++)
 		{
-			if (!ct_tree_node_is_critical(&(tree->nodes[i])) &&
-				!ct_tree_node_is_critical(&(tree->nodes[tree->arcs[j]])))
+			if ((ct_tree_get_node_type(&(tree->nodes[i])) == CT_NODE_TYPE_REGULAR) &&
+				ct_tree_get_node_type(&(tree->nodes[tree->arcs[j]])) ==
+				CT_NODE_TYPE_REGULAR)
 			{
 				continue;
 			}
@@ -716,7 +746,7 @@ int ct_tree_build_test_case(ct_tree_t *join_tree, ct_tree_t *split_tree,
 	for (uint32_t i = 0; i < join_tree->num_nodes; i++)
 	{
 		join_tree->nodes[i].value = split_tree->nodes[i].value = node_labels[i];
-		join_tree->nodes[i].vertex = split_tree->nodes[i].vertex = i;
+		join_tree->nodes[i].node_to_vertex = split_tree->nodes[i].node_to_vertex = i;
 
 		join_tree->nodes[i].degree[0] = up_degrees_join[i];
 		join_tree->nodes[i].degree[1] = down_degrees_join[i];

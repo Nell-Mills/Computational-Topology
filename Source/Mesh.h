@@ -1,6 +1,7 @@
 #ifndef CT_MESH_H
 #define CT_MESH_H
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,15 +53,8 @@ typedef struct
 	uint32_t u;
 } ct_face_vertex_t;
 
-typedef struct
-{
-	ct_face_vertex_t vertices[3];
-} ct_face_t;
-
-typedef struct
-{
-	uint32_t vertices[3];
-} ct_face_gpu_ready_t;
+typedef ct_face_vertex_t ct_face_t[3];
+typedef uint32_t ct_face_gpu_ready_t[3];
 
 typedef struct
 {
@@ -120,6 +114,7 @@ uint32_t ct_mesh_get_previous_vertex_edge(ct_mesh_t *mesh, uint32_t vertex, uint
 int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 void ct_mesh_gpu_ready_free(ct_mesh_gpu_ready_t *mesh);
 int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
+int ct_mesh_gpu_ready_vertex_normals(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 					char error[NM_MAX_ERROR_LENGTH]);
 

@@ -10,10 +10,17 @@
 
 #include "Mesh.h"
 
+#define CT_NODE_TYPE_DELETED	-1
+#define CT_NODE_TYPE_REGULAR	 0
+#define CT_NODE_TYPE_MINIMUM	 1
+#define CT_NODE_TYPE_MAXIMUM	 2
+#define CT_NODE_TYPE_SADDLE	 3
+
 typedef struct
 {
 	float value;
-	uint32_t vertex;
+	uint32_t node_to_vertex;
+	uint32_t vertex_to_node;
 	uint32_t degree[2];	// Up[0], down[1].
 	uint32_t first_arc[2];
 } ct_tree_node_t;
@@ -40,9 +47,10 @@ typedef struct
 
 // Tree management:
 void ct_tree_free(ct_tree_t *tree);
-int ct_tree_node_is_critical(ct_tree_node_t *node);
+int8_t ct_tree_get_node_type(ct_tree_node_t *node);
 int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to, char error[NM_MAX_ERROR_LENGTH]);
 int ct_tree_nodes_qsort_compare(const void *a, const void *b);
+int ct_tree_reduce_to_critical(ct_tree_t *from, ct_tree_t *to);
 
 // Tree construction:
 int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
@@ -56,6 +64,7 @@ int ct_index_increment_join(uint32_t *index, uint32_t limit);
 int ct_index_increment_split(uint32_t *index, uint32_t limit);
 
 // Scalar functions:
+int ct_tree_scalar_function_x(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 int ct_tree_scalar_function_y(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 int ct_tree_scalar_function_z(ct_tree_t *tree, ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH]);
 
