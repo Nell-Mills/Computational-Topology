@@ -417,10 +417,8 @@ int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERRO
 	mesh->normals = malloc(mesh->num_vertices * sizeof(ct_normal_t));
 	mesh->colours = malloc(mesh->num_vertices * sizeof(ct_colour_t));
 	mesh->uvs = malloc(mesh->num_vertices * sizeof(ct_uv_t));
-	mesh->original_index = malloc(mesh->num_vertices * sizeof(uint32_t));
 	mesh->faces = malloc(mesh->num_faces * sizeof(ct_face_gpu_ready_t));
-	if (!mesh->vertices || !mesh->normals || !mesh->colours ||
-		!mesh->uvs || !mesh->original_index || !mesh->faces)
+	if (!mesh->vertices || !mesh->normals || !mesh->colours || !mesh->uvs || !mesh->faces)
 	{
 		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Could not allocate memory for mesh \"%s\".", mesh->name);
@@ -432,7 +430,6 @@ int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERRO
 	memset(mesh->normals, 0, mesh->num_vertices * sizeof(ct_normal_t));
 	memset(mesh->colours, 0, mesh->num_vertices * sizeof(ct_colour_t));
 	memset(mesh->uvs, 0, mesh->num_vertices * sizeof(ct_uv_t));
-	memset(mesh->original_index, 0, mesh->num_vertices * sizeof(uint32_t));
 	memset(mesh->faces, 0, mesh->num_faces * sizeof(ct_face_gpu_ready_t));
 
 	return 0;
@@ -440,17 +437,15 @@ int ct_mesh_gpu_ready_allocate(ct_mesh_gpu_ready_t *mesh, char error[NM_MAX_ERRO
 
 void ct_mesh_gpu_ready_free(ct_mesh_gpu_ready_t *mesh)
 {
-	char name[NM_MAX_NAME_LENGTH];
-	strcpy(name, mesh->name);
-
 	if (mesh->vertices) { free(mesh->vertices); }
 	if (mesh->normals) { free(mesh->normals); }
 	if (mesh->colours) { free(mesh->colours); }
 	if (mesh->uvs) { free(mesh->uvs); }
-	if (mesh->original_index) { free(mesh->original_index); }
 	if (mesh->faces) { free(mesh->faces); }
 
-	memset(mesh, 0, sizeof(ct_mesh_gpu_ready_t));
+	char name[NM_MAX_NAME_LENGTH];
+	strcpy(name, mesh->name);
+	memset(mesh, 0, sizeof(*mesh));
 	strcpy(mesh->name, name);
 }
 
@@ -489,13 +484,6 @@ int ct_mesh_gpu_ready_check_validity(ct_mesh_gpu_ready_t *mesh,
 	{
 		snprintf(error, NM_MAX_ERROR_LENGTH,
 			"Mesh \"%s\" has no memory allocated for UV coordinates.", mesh->name);
-		return -1;
-	}
-
-	if (!mesh->original_index)
-	{
-		snprintf(error, NM_MAX_ERROR_LENGTH,
-			"Mesh \"%s\" has no memory allocated for original indices.", mesh->name);
 		return -1;
 	}
 
@@ -645,6 +633,7 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 		return -1;
 	}
 
+	uint32_t original_index;
 	uint32_t index;
 	uint32_t end;
 	for (uint32_t i = 0; i < num_unique_vertices; i++)
@@ -668,7 +657,7 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 		mesh_new->uvs[i].u = mesh_old->uvs[face_vertices[index + 3]].u;
 		mesh_new->uvs[i].v = mesh_old->uvs[face_vertices[index + 3]].v;
 
-		mesh_new->original_index[i] = face_vertices[index];
+		original_index = face_vertices[index];
 
 		// Fill in face data (traverse unique vertex bins):
 		if (i == (num_unique_vertices - 1)) { end = num_face_vertices * 5; }
@@ -677,8 +666,7 @@ int ct_mesh_prepare_for_gpu(ct_mesh_t *mesh_old, ct_mesh_gpu_ready_t *mesh_new,
 		{
 			for (int k = 0; k < 3; k++)
 			{
-				if (mesh_old->faces[face_vertices[j + 4]][k].v ==
-							mesh_new->original_index[i])
+				if (mesh_old->faces[face_vertices[j + 4]][k].v == original_index)
 				{
 					mesh_new->faces[face_vertices[j + 4]][k] = i;
 				}
@@ -868,8 +856,7 @@ void ct_mesh_gpu_ready_print(FILE *file, ct_mesh_gpu_ready_t *mesh)
 		fprintf(file, "Data for vertices in first face:\n");
 		for (int i = 0; i < 3; i++)
 		{
-			fprintf(file, "Vertex %u (Originally %u):\n", mesh->faces[0][i],
-					mesh->original_index[mesh->faces[0][i]]);
+			fprintf(file, "Vertex %u:\n", mesh->faces[0][i]);
 			fprintf(file, "--> Position: %f, %f, %f\n",
 				mesh->vertices[mesh->faces[0][i]].x,
 				mesh->vertices[mesh->faces[0][i]].y,

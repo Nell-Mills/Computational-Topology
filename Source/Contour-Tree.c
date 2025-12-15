@@ -6,23 +6,10 @@
 
 void ct_tree_free(ct_tree_t *tree)
 {
-	if (tree->nodes)
-	{
-		free(tree->nodes);
-		tree->nodes = NULL;
-	}
-
-	if (tree->arcs)
-	{
-		free(tree->arcs);
-		tree->arcs = NULL;
-	}
-
-	if (tree->roots)
-	{
-		free(tree->roots);
-		tree->roots = NULL;
-	}
+	if (tree->nodes) { free(tree->nodes); }
+	if (tree->arcs) { free(tree->arcs); }
+	if (tree->roots) { free(tree->roots); }
+	memset(tree, 0, sizeof(*tree));
 }
 
 int8_t ct_tree_get_node_type(ct_tree_node_t *node)
@@ -32,6 +19,13 @@ int8_t ct_tree_get_node_type(ct_tree_node_t *node)
 	if (!node->degree[0]) { return CT_NODE_TYPE_MAXIMUM; }
 	if ((node->degree[0] > 1) || (node->degree[1] > 1)) { return CT_NODE_TYPE_SADDLE; }
 	return CT_NODE_TYPE_REGULAR;
+}
+
+int ct_tree_node_is_critical(ct_tree_node_t *node)
+{
+	int8_t type = ct_tree_get_node_type(node);
+	if ((type != CT_NODE_TYPE_DELETED) && (type != CT_NODE_TYPE_REGULAR)) { return 1; }
+	return 0;
 }
 
 int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to, char error[NM_MAX_ERROR_LENGTH])
@@ -195,6 +189,207 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 	}
 
 	ct_disjoint_set_free(&disjoint_set);
+	return 0;
+}
+
+int ct_merge_trees_reduce_to_critical(ct_tree_t *join_tree, ct_tree_t *split_tree,
+						char error[NM_MAX_ERROR_LENGTH])
+{
+	ct_disjoint_set_t disjoint_set_join = {0};
+	disjoint_set_join.num_elements = join_tree->num_nodes;
+	if (ct_disjoint_set_allocate(&disjoint_set_join, error)) { return -1; }
+
+	ct_disjoint_set_t disjoint_set_split = {0};
+	disjoint_set_split.num_elements = split_tree->num_nodes;
+	if (ct_disjoint_set_allocate(&disjoint_set_split, error))
+	{
+		ct_disjoint_set_free(&disjoint_set_join);
+		return -1;
+	}
+
+	uint8_t *critical = malloc(join_tree->num_nodes * sizeof(uint8_t));
+	if (!critical)
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH,
+			"Could not allocate memory for critical node map.");
+		ct_disjoint_set_free(&disjoint_set_split);
+		ct_disjoint_set_free(&disjoint_set_join);
+		return -1;
+	}
+	memset(critical, 0, join_tree->num_nodes * sizeof(uint8_t));
+
+	uint32_t critical_count = 0;
+	for (uint32_t i = 0; i < join_tree->num_nodes; i++)
+	{
+		if (ct_tree_node_is_critical(&(join_tree->nodes[i])) ||
+			ct_tree_node_is_critical(&(split_tree->nodes[i])))
+		{
+			critical[i] = 1;
+			critical_count++;
+		}
+	}
+
+	uint32_t index_split;
+	uint32_t node_split = 0;
+	uint32_t arc_split[2] = { 0, split_tree->num_arcs };
+
+	uint32_t index_join;
+	uint32_t node_join_final = critical_count - 1;
+	uint32_t node_join = join_tree->num_nodes - 1;
+	uint32_t arc_join[2] = { 0, join_tree->num_arcs };
+
+	uint32_t component;
+	uint32_t extremum;
+	for (uint32_t i = 0; i < join_tree->num_nodes; i++)
+	{
+		/*-----------*
+		 - Join tree -
+		 *-----------*/
+		index_join = join_tree->num_nodes - i - 1;
+
+		// Copy critical node info to appropriate space:
+		if (critical[index_join])
+		{
+			join_tree->nodes[node_join].value = join_tree->nodes[index_join].value;
+			join_tree->nodes[node_join].node_to_vertex =
+				join_tree->nodes[index_join].node_to_vertex;
+			join_tree->nodes[node_join].vertex_to_node =
+				join_tree->nodes[index_join].vertex_to_node;
+			join_tree->nodes[node_join].degree[0] =
+				join_tree->nodes[index_join].degree[0];
+			join_tree->nodes[node_join].degree[1] =
+				join_tree->nodes[index_join].degree[1];
+		}
+
+		// Iterate through up arcs and keep track of components:
+		for (uint32_t j = join_tree->nodes[index_join].first_arc[0];
+			j < (join_tree->nodes[index_join].first_arc[0] +
+			join_tree->nodes[index_join].degree[0]); j++)
+		{
+			extremum = disjoint_set_join.extremum[ct_disjoint_set_find(
+					join_tree->arcs[j], &disjoint_set_join)];
+			ct_disjoint_set_union(index_join, join_tree->arcs[j], &disjoint_set_join);
+			component = ct_disjoint_set_find(join_tree->arcs[j], &disjoint_set_join);
+			disjoint_set_join.extremum[component] = extremum;
+			if (critical[index_join])
+			{
+				// Found superarc:
+				join_tree->arcs[join_tree->nodes[extremum].first_arc[1]] =
+									node_join_final;
+				join_tree->arcs[arc_join[0]] = extremum - (join_tree->num_nodes - critical_count);
+				arc_join[0]++;
+			}
+		}
+
+		// Finalise critical node info:
+		if (critical[index_join])
+		{
+			join_tree->nodes[node_join].first_arc[0] = arc_join[0] -
+					join_tree->nodes[index_join].degree[0];
+			join_tree->nodes[node_join].first_arc[1] = arc_join[1];
+
+			component = ct_disjoint_set_find(index_join, &disjoint_set_join);
+			disjoint_set_join.extremum[component] = node_join;
+			arc_join[1] += join_tree->nodes[node_join].degree[1];
+			node_join--;
+			node_join_final--;
+		}
+
+		/*------------*
+		 - Split tree -
+		 *------------*/
+		index_split = i;
+
+		// Copy critical node info to appropriate space:
+		if (critical[index_split])
+		{
+			split_tree->nodes[node_split].value = split_tree->nodes[index_split].value;
+			split_tree->nodes[node_split].node_to_vertex =
+				split_tree->nodes[index_split].node_to_vertex;
+			split_tree->nodes[node_split].vertex_to_node =
+				split_tree->nodes[index_split].vertex_to_node;
+			split_tree->nodes[node_split].degree[0] =
+				split_tree->nodes[index_split].degree[0];
+			split_tree->nodes[node_split].degree[1] =
+				split_tree->nodes[index_split].degree[1];
+
+			component = ct_disjoint_set_find(index_split, &disjoint_set_split);
+			disjoint_set_split.extremum[component] = node_split;
+		}
+
+		// Iterate through down arcs and keep track of components:
+		for (uint32_t j = split_tree->nodes[index_split].first_arc[1];
+			j < (split_tree->nodes[index_split].first_arc[1] +
+			split_tree->nodes[index_split].degree[1]); j++)
+		{
+			extremum = disjoint_set_split.extremum[ct_disjoint_set_find(
+					split_tree->arcs[j], &disjoint_set_split)];
+			ct_disjoint_set_union(index_split, split_tree->arcs[j],
+							&disjoint_set_split);
+			component = ct_disjoint_set_find(split_tree->arcs[j], &disjoint_set_split);
+			disjoint_set_split.extremum[component] = extremum;
+			if (critical[index_split])
+			{
+				// Found superarc:
+				split_tree->arcs[split_tree->nodes[extremum].first_arc[0]] =
+										node_split;
+				split_tree->arcs[arc_split[1]] = extremum;
+				arc_split[1]++;
+			}
+		}
+
+		// Finalise critical node info:
+		if (critical[index_split])
+		{
+			split_tree->nodes[node_split].first_arc[1] = arc_split[1] -
+					split_tree->nodes[index_split].degree[1];
+			split_tree->nodes[node_split].first_arc[0] = arc_split[0];
+
+			component = ct_disjoint_set_find(index_split, &disjoint_set_split);
+			disjoint_set_split.extremum[component] = node_split;
+			arc_split[0] += split_tree->nodes[node_split].degree[0];
+			node_split++;
+		}
+	}
+
+	free(critical);
+
+	// Finalise new join tree information:
+	join_tree->num_nodes = critical_count;
+	if (!memmove(join_tree->nodes, &(join_tree->nodes[node_join + 1]), critical_count *
+							sizeof(join_tree->nodes[0])))
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not move join tree node memory.");
+		ct_disjoint_set_free(&disjoint_set_split);
+		ct_disjoint_set_free(&disjoint_set_join);
+		return -1;
+	}
+	if (!memmove(&(join_tree->arcs[arc_join[0]]), &(join_tree->arcs[join_tree->num_arcs]),
+		(join_tree->num_nodes - join_tree->num_roots) * sizeof(join_tree->arcs[0])))
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not move join tree arc memory.");
+		ct_disjoint_set_free(&disjoint_set_split);
+		ct_disjoint_set_free(&disjoint_set_join);
+		return -1;
+	}
+	join_tree->num_arcs = join_tree->num_nodes - join_tree->num_roots;
+
+	// Finalise new split tree information:
+	split_tree->num_nodes = critical_count;
+	if (!memmove(&(split_tree->arcs[arc_split[0]]), &(split_tree->arcs[split_tree->num_arcs]),
+		(split_tree->num_nodes - split_tree->num_roots) * sizeof(split_tree->arcs[0])))
+	{
+		snprintf(error, NM_MAX_ERROR_LENGTH, "Could not move split tree arc memory.");
+		ct_disjoint_set_free(&disjoint_set_split);
+		ct_disjoint_set_free(&disjoint_set_join);
+		return -1;
+	}
+	split_tree->num_arcs = split_tree->num_nodes - split_tree->num_roots;
+
+	// TODO realloc to smaller sizes.
+
+	ct_disjoint_set_free(&disjoint_set_split);
+	ct_disjoint_set_free(&disjoint_set_join);
 	return 0;
 }
 
@@ -666,7 +861,7 @@ void ct_tree_print(FILE *file, ct_tree_t *tree)
 	fprintf(file, ":\n");
 	for (uint32_t i = 0; i < tree->num_nodes; i++)
 	{
-		if (ct_tree_get_node_type(&(tree->nodes[i])) == CT_NODE_TYPE_REGULAR) { continue; }
+		if (!ct_tree_node_is_critical(&(tree->nodes[i]))) { continue; }
 		fprintf(file, "Node %u: %u -> Up = %u, Down = %u\n", i,
 			tree->nodes[i].node_to_vertex, tree->nodes[i].degree[0],
 			tree->nodes[i].degree[1]);
@@ -684,9 +879,8 @@ void ct_tree_print(FILE *file, ct_tree_t *tree)
 		num_arcs = tree->nodes[i].degree[0];
 		for (uint32_t j = first_arc; j < (first_arc + num_arcs); j++)
 		{
-			if ((ct_tree_get_node_type(&(tree->nodes[i])) == CT_NODE_TYPE_REGULAR) &&
-				ct_tree_get_node_type(&(tree->nodes[tree->arcs[j]])) ==
-				CT_NODE_TYPE_REGULAR)
+			if (!ct_tree_node_is_critical(&(tree->nodes[i])) &&
+				!ct_tree_node_is_critical(&(tree->nodes[tree->arcs[j]])))
 			{
 				continue;
 			}

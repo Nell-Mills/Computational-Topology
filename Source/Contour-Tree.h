@@ -48,13 +48,15 @@ typedef struct
 // Tree management:
 void ct_tree_free(ct_tree_t *tree);
 int8_t ct_tree_get_node_type(ct_tree_node_t *node);
+int ct_tree_node_is_critical(ct_tree_node_t *node);
 int ct_tree_copy_nodes(ct_tree_t *from, ct_tree_t *to, char error[NM_MAX_ERROR_LENGTH]);
 int ct_tree_nodes_qsort_compare(const void *a, const void *b);
-int ct_tree_reduce_to_critical(ct_tree_t *from, ct_tree_t *to);
 
 // Tree construction:
 int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 	uint32_t start_index, char error[NM_MAX_ERROR_LENGTH]);
+int ct_merge_trees_reduce_to_critical(ct_tree_t *join_tree, ct_tree_t *split_tree,
+						char error[NM_MAX_ERROR_LENGTH]);
 int ct_contour_tree_construct(ct_tree_t *contour_tree, ct_tree_t *join_tree,
 	ct_tree_t *split_tree, char error[NM_MAX_ERROR_LENGTH]);
 

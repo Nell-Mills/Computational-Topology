@@ -93,8 +93,6 @@ typedef struct
 	ct_colour_t *colours;
 	ct_uv_t *uvs;
 
-	uint32_t *original_index; // Maps to vertices in non-GPU mesh.
-
 	uint32_t num_faces;
 	ct_face_gpu_ready_t *faces;
 } ct_mesh_gpu_ready_t;
