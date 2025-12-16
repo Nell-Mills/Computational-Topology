@@ -1,5 +1,5 @@
-#ifndef CT_COMPUTATIONAL_TOPOLOGY_H
-#define CT_COMPUTATIONAL_TOPOLOGY_H
+#ifndef CT_CORE_H
+#define CT_CORE_H
 
 #include "Contour-Tree.h"
 #include "Mesh.h"

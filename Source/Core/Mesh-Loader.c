@@ -46,9 +46,6 @@ int ct_mesh_load(ct_mesh_t *mesh, char error[NM_MAX_ERROR_LENGTH])
 		return -1;
 	}
 
-	if (ct_mesh_calculate_edges(mesh, error)) { return -1; }
-	if (ct_mesh_check_manifold(mesh, error)) { return -1; }
-
 	return 0;
 }
 

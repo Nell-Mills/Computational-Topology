@@ -18,7 +18,8 @@ VKA_CLONE	:= git clone $(VKA_URL) $(VKA_DIR)/Temp && \
 DEPS_CLONE := $(CONF_CLONE) && $(VKA_CLONE) &&
 
 DEPS_PROJECT :=\
-$(wildcard Source/*.c)
+$(wildcard Source/Core/*.c)\
+$(wildcard Source/Application/*.c)
 
 DEPS_INCLUDE :=\
 Include/Volk/*.c\

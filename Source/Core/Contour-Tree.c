@@ -195,6 +195,8 @@ int ct_merge_tree_construct(ct_tree_t *merge_tree, ct_mesh_t *mesh,
 int ct_merge_trees_reduce_to_critical(ct_tree_t *join_tree, ct_tree_t *split_tree,
 						char error[NM_MAX_ERROR_LENGTH])
 {
+	// TODO - you can parallelise this.
+
 	ct_disjoint_set_t disjoint_set_join = {0};
 	disjoint_set_join.num_elements = join_tree->num_nodes;
 	if (ct_disjoint_set_allocate(&disjoint_set_join, error)) { return -1; }
@@ -631,16 +633,17 @@ void ct_tree_remove_node(ct_tree_t *tree, uint32_t node)
 			}
 		}
 		tree->nodes[node].degree[direction]--;
-		#ifdef CT_DEBUG
 		if (!found)
 		{
+			#ifdef CT_DEBUG
 			printf("\nLeaf not attached to anything: %u\n", node);
 			printf("Node:\t%u,\tDegree: (%u, %u)\n", node,
 				tree->nodes[node].degree[0], tree->nodes[node].degree[1]);
 			printf("Other:\t%u,\tDegree: (%u, %u)\n", other,
 				tree->nodes[other].degree[0], tree->nodes[other].degree[1]);
+			#endif
+			return;
 		}
-		#endif
 	}
 	else
 	{
